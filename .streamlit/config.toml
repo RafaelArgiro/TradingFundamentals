@@ -1,0 +1,7 @@
+[browser]
+# Corporate proxies often block the telemetry endpoint and slow down startup.
+gatherUsageStats = false
+
+[server]
+port = 8501
+headless = false
