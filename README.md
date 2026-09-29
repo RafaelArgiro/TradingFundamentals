@@ -96,13 +96,16 @@ fine without it.
 
 ---
 
-## 3. Running an app
+## 3. Running the app
 
 From the repository root:
 
 ```powershell
-& ".venv/Scripts/python.exe" -m streamlit run "01_Expectancy/app.py"
+& ".venv/Scripts/python.exe" -m streamlit run streamlit_app.py
 ```
+
+This is a **multipage app**: one server, one port, with a navigation bar at the
+top to switch between topics.
 
 Your browser opens at <http://localhost:8501>. If it doesn't, `Ctrl+Click` the
 URL printed in the terminal.
@@ -135,7 +138,7 @@ rest of that terminal session:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
-streamlit run 01_Expectancy/app.py
+streamlit run streamlit_app.py
 ```
 
 Your prompt will show `(.venv)` while it's active. Type `deactivate` to exit.
@@ -151,7 +154,8 @@ Identical, except the interpreter lives in `bin` instead of `Scripts`:
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python -m streamlit run 01_Expectancy/app.py
+.venv/bin/python -m pip install -e .
+.venv/bin/python -m streamlit run streamlit_app.py
 ```
 
 ---
@@ -162,7 +166,7 @@ Once set up, starting work is just:
 
 ```powershell
 cd TradingFundamentals
-& ".venv/Scripts/python.exe" -m streamlit run "01_Expectancy/app.py"
+& ".venv/Scripts/python.exe" -m streamlit run streamlit_app.py
 ```
 
 Edit the `.py` file and save — Streamlit detects the change and offers a
@@ -177,16 +181,44 @@ refresh automatically on every save.
 TradingFundamentals/
 ├── .venv/              # Local environment. Not in Git. Recreate per machine.
 ├── .streamlit/
-│   └── config.toml     # Shared app settings (port, telemetry off).
-├── 01_Expectancy/
-│   └── app.py          # Setup smoke test / expectancy app.
+│   └── config.toml     # Shared app settings.
+├── streamlit_app.py    # Entry point. Defines the navigation.
+├── app_pages/          # One file per page. Display only.
+│   ├── home.py
+│   └── expectancy.py
+├── tfcore/             # All calculations. Never imports Streamlit.
+│   ├── expectancy.py
+│   └── simulation.py
+├── tests/              # Checks for tfcore. Run with pytest.
+├── pyproject.toml      # Makes `import tfcore` work everywhere.
 ├── requirements.txt    # Pinned dependencies — the portable recipe.
 ├── .gitignore
-└── README.md
+├── README.md
+└── HOW_IT_WORKS.md
 ```
 
-One virtual environment at the root serves every numbered subfolder. Future
-projects (`02_...`, `03_...`) reuse it rather than each having their own.
+The split that matters: **`tfcore/` holds the maths, `app_pages/` holds the
+display.** Because `tfcore` never imports Streamlit, every calculation can be
+tested in isolation and reused by any page.
+
+### Adding a page
+
+1. Create `app_pages/<topic>.py`. Do not call `st.title()` — the entry point
+   handles that.
+2. Put any new calculations in a `tfcore/<topic>.py` module, with tests in
+   `tests/test_<topic>.py`.
+3. Register it in `streamlit_app.py`:
+
+```python
+st.Page("app_pages/<topic>.py", title="Topic", icon=":material/show_chart:")
+```
+
+Order in that list is the order in the navigation bar — no numbered filenames
+needed.
+
+> The folder is called `app_pages/`, not `pages/`, on purpose. A folder named
+> `pages/` triggers Streamlit's older automatic page discovery, which conflicts
+> with the explicit navigation used here.
 
 ---
 

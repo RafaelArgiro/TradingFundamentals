@@ -1,6 +1,6 @@
 """Expectancy explorer: how win rate and reward-to-risk drive long-run results.
 
-UI only -- every calculation lives in `tfcore`.
+Display only -- every calculation lives in `tfcore`.
 """
 
 import plotly.express as px
@@ -13,9 +13,6 @@ from tfcore.expectancy import (
     reward_to_risk,
 )
 from tfcore.simulation import max_drawdown, simulate_equity_curve, simulate_many_curves
-
-st.set_page_config(page_title="Expectancy", layout="wide")
-st.title("Trade expectancy")
 
 with st.sidebar:
     st.header("System")

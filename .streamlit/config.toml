@@ -3,5 +3,6 @@
 gatherUsageStats = false
 
 [server]
-port = 8501
+# No port pinned here on purpose: it would apply to every app and block
+# running two at once. Pass --server.port per app instead.
 headless = false
