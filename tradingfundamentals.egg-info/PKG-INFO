@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: tradingfundamentals
+Version: 0.1.0
+Summary: Streamlit apps exploring trading fundamentals
+Requires-Python: >=3.12

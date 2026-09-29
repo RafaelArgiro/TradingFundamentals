@@ -72,7 +72,20 @@ This reads `requirements.txt` and installs the exact pinned versions. Expect it
 to pull in ~45 packages (the five listed plus their dependencies) and take a
 minute or two.
 
-### Step 4 — Point VS Code at the environment
+### Step 4 — Install the shared logic package
+
+```powershell
+& ".venv/Scripts/python.exe" -m pip install -e .
+```
+
+The calculations live in `tfcore/`, separate from the apps. This command makes
+`import tfcore` work from anywhere — any app, any test, any notebook.
+
+`-e` means *editable*: instead of copying the folder, it registers a pointer to
+it. Edit a file in `tfcore/` and the change is live immediately, with no
+reinstall.
+
+### Step 5 — Point VS Code at the environment
 
 Open the folder in VS Code, then press `Ctrl+Shift+P` and run
 **"Python: Select Interpreter"**. Choose the one whose path ends in
@@ -95,6 +108,17 @@ Your browser opens at <http://localhost:8501>. If it doesn't, `Ctrl+Click` the
 URL printed in the terminal.
 
 **To stop the app:** click in the terminal and press `Ctrl+C`.
+
+## Checking the calculations
+
+The maths in `tfcore/` is tested independently of the user interface, so you can
+validate it without launching a browser:
+
+```powershell
+& ".venv/Scripts/python.exe" -m pytest
+```
+
+Runs in a couple of seconds. Add `-v` to see each test by name.
 
 ### Why the command looks like that
 

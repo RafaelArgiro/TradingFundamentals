@@ -1,0 +1,18 @@
+[project]
+name = "tradingfundamentals"
+version = "0.1.0"
+description = "Streamlit apps exploring trading fundamentals"
+requires-python = ">=3.12"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["tfcore*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Lets `pytest` find tfcore straight from the repo root, even before
+# `pip install -e .` has been run.
+pythonpath = ["."]

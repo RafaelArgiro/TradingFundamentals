@@ -1,70 +1,75 @@
-"""Smoke test: verifies Streamlit, pandas, numpy, matplotlib and plotly all work."""
+"""Expectancy explorer: how win rate and reward-to-risk drive long-run results.
 
-import sys
+UI only -- every calculation lives in `tfcore`.
+"""
 
-import matplotlib
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-matplotlib.use("Agg")  # no GUI backend needed; Streamlit renders the figure itself
-
-st.set_page_config(page_title="Setup smoke test", layout="wide")
-st.title("Setup smoke test")
-
-st.subheader("1. Environment")
-st.code(
-    f"python     {sys.version.split()[0]}\n"
-    f"executable {sys.executable}\n"
-    f"streamlit  {st.__version__}\n"
-    f"pandas     {pd.__version__}\n"
-    f"numpy      {np.__version__}\n"
-    f"matplotlib {matplotlib.__version__}",
-    language="text",
+from tfcore.expectancy import (
+    ExpectancyInputs,
+    breakeven_win_rate,
+    expectancy,
+    reward_to_risk,
 )
+from tfcore.simulation import max_drawdown, simulate_equity_curve, simulate_many_curves
 
-st.subheader("2. Interactivity")
-n_trades = st.slider("Number of trades", 10, 500, 100, step=10)
-win_rate = st.slider("Win rate", 0.0, 1.0, 0.45, step=0.01)
-avg_win = st.number_input("Average win (R)", value=2.0, step=0.1)
-avg_loss = st.number_input("Average loss (R)", value=1.0, step=0.1)
+st.set_page_config(page_title="Expectancy", layout="wide")
+st.title("Trade expectancy")
 
-rng = np.random.default_rng(42)
-wins = rng.random(n_trades) < win_rate
-results = np.where(wins, avg_win, -avg_loss)
+with st.sidebar:
+    st.header("System")
+    win_rate = st.slider("Win rate", 0.0, 1.0, 0.45, step=0.01)
+    avg_win = st.number_input("Average win (R)", min_value=0.0, value=2.0, step=0.1)
+    avg_loss = st.number_input("Average loss (R)", min_value=0.1, value=1.0, step=0.1)
 
-df = pd.DataFrame(
-    {
-        "trade": np.arange(1, n_trades + 1),
-        "result_r": results,
-        "equity_r": results.cumsum(),
-    }
-)
+    st.header("Simulation")
+    n_trades = st.slider("Number of trades", 10, 1000, 200, step=10)
+    n_runs = st.slider("Number of runs", 1, 200, 50, step=1)
+    seed = st.number_input("Random seed", min_value=0, value=42, step=1)
 
-expectancy = win_rate * avg_win - (1 - win_rate) * avg_loss
-st.metric("Expectancy per trade (R)", f"{expectancy:.3f}")
+inputs = ExpectancyInputs(win_rate=win_rate, avg_win=avg_win, avg_loss=avg_loss)
+edge = expectancy(inputs)
+breakeven = breakeven_win_rate(avg_win, avg_loss)
 
-st.subheader("3. DataFrame")
-st.dataframe(df.head(10), width="stretch")
+a, b, c, d = st.columns(4)
+a.metric("Expectancy (R/trade)", f"{edge:+.3f}")
+b.metric("Reward : risk", f"{reward_to_risk(inputs):.2f} : 1")
+c.metric("Breakeven win rate", f"{breakeven:.1%}")
+d.metric("Edge over breakeven", f"{win_rate - breakeven:+.1%}")
 
-col_left, col_right = st.columns(2)
+if edge > 0:
+    st.success(f"Positive expectancy: about {edge:+.3f}R per trade on average.")
+else:
+    st.error(f"Negative expectancy: about {edge:+.3f}R per trade on average.")
 
-with col_left:
-    st.caption("matplotlib")
-    fig, ax = plt.subplots()
-    ax.plot(df["trade"], df["equity_r"])
-    ax.axhline(0, linestyle="--", linewidth=0.8)
-    ax.set_xlabel("Trade")
-    ax.set_ylabel("Cumulative R")
-    st.pyplot(fig)
+single = simulate_equity_curve(inputs, n_trades=n_trades, seed=int(seed))
 
-with col_right:
-    st.caption("plotly (interactive)")
-    st.plotly_chart(
-        px.line(df, x="trade", y="equity_r", labels={"equity_r": "Cumulative R"}),
-        width="stretch",
+left, right = st.columns(2)
+
+with left:
+    st.subheader("One possible run")
+    fig = px.line(single, x="trade", y="equity_r", labels={"equity_r": "Cumulative R"})
+    fig.add_hline(y=0, line_dash="dash", line_width=1)
+    st.plotly_chart(fig, width="stretch")
+    st.caption(
+        f"Final: {single['equity_r'].iloc[-1]:+.1f}R  |  "
+        f"Max drawdown: {max_drawdown(single['equity_r']):.1f}R"
     )
 
-st.success("If you can see both charts and the table, every part of the stack works.")
+with right:
+    st.subheader(f"{n_runs} runs of the same system")
+    many = simulate_many_curves(inputs, n_trades=n_trades, n_runs=n_runs, seed=int(seed))
+    fig = px.line(many, labels={"value": "Cumulative R", "index": "trade"})
+    fig.add_hline(y=0, line_dash="dash", line_width=1)
+    fig.update_layout(showlegend=False)
+    st.plotly_chart(fig, width="stretch")
+    finals = many.iloc[-1]
+    st.caption(
+        f"Final R across runs — worst {finals.min():+.1f}, "
+        f"median {finals.median():+.1f}, best {finals.max():+.1f}  |  "
+        f"{(finals > 0).mean():.0%} of runs profitable"
+    )
+
+with st.expander("Trade-by-trade data"):
+    st.dataframe(single, width="stretch")

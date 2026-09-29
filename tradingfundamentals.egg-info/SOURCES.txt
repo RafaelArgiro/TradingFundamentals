@@ -1,0 +1,11 @@
+README.md
+pyproject.toml
+tests/test_expectancy.py
+tests/test_simulation.py
+tfcore/__init__.py
+tfcore/expectancy.py
+tfcore/simulation.py
+tradingfundamentals.egg-info/PKG-INFO
+tradingfundamentals.egg-info/SOURCES.txt
+tradingfundamentals.egg-info/dependency_links.txt
+tradingfundamentals.egg-info/top_level.txt
