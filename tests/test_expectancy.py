@@ -7,6 +7,7 @@ from tfcore.expectancy import (
     breakeven_points,
     breakeven_win_rate,
     expectancy,
+    expectancy_from_rr,
     required_win_rate,
     reward_to_risk,
 )
@@ -54,6 +55,15 @@ def test_breakeven_win_rate_gives_zero_expectancy():
 
 def test_reward_to_risk():
     assert reward_to_risk(ExpectancyInputs(0.5, 3.0, 1.5)) == pytest.approx(2.0)
+
+
+def test_expectancy_from_rr():
+    assert expectancy_from_rr(0.45, 2.0) == pytest.approx(0.35)
+
+
+def test_expectancy_from_rr_is_zero_on_the_breakeven_curve():
+    for rr in [0.5, 1.0, 2.0, 5.0, 10.0]:
+        assert expectancy_from_rr(required_win_rate(rr), rr) == pytest.approx(0.0)
 
 
 @pytest.mark.parametrize("bad_rate", [-0.1, 1.1])

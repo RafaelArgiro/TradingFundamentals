@@ -76,6 +76,15 @@ def required_win_rate(rr: float) -> float:
     return 1.0 / (1.0 + rr)
 
 
+def expectancy_from_rr(win_rate: float, rr: float) -> float:
+    """Expectancy in R for a system described by win rate and reward-to-risk.
+
+    Assumes the average loss is exactly 1R, which is what makes `rr` and the
+    break-even curve directly comparable.
+    """
+    return expectancy(ExpectancyInputs(win_rate=win_rate, avg_win=rr, avg_loss=1.0))
+
+
 def breakeven_curve(
     rr_min: float = 0.5, rr_max: float = 10.0, n_points: int = 400
 ) -> pd.DataFrame:

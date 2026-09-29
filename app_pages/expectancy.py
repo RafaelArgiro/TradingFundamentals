@@ -3,10 +3,11 @@
 Display only -- every calculation lives in `tfcore`.
 """
 
+import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from tfcore.expectancy import breakeven_curve, breakeven_points
+from tfcore.expectancy import breakeven_curve, breakeven_points, expectancy_from_rr
 
 RR_MIN, RR_MAX = 0.2, 10.0
 LABEL_POINTS = (0.5, *range(1, 11))
@@ -21,6 +22,16 @@ LOSS_FILL = "rgba(214, 60, 60, 0.12)"
 GRID_COLOR = "rgba(128, 128, 128, 0.25)"
 LINE_COLOR = "#1f77b4"
 SWEET_SPOT_COLOR = "#1b5e20"
+SYSTEM_COLOR = "#d62728"
+POSITIVE_COLOR = "#2e7d32"
+
+DEFAULT_SYSTEMS = pd.DataFrame(
+    {
+        "System": ["A", "B", "C", "D"],
+        "RR": [0.8, 2.0, 3.0, 5.0],
+        "Win rate (%)": [70.0, 45.0, 35.0, 22.0],
+    }
+)
 
 st.latex(r"\text{Break-even win rate} = \frac{1}{1 + RR}")
 
@@ -29,6 +40,7 @@ toggles, lo_col, hi_col = st.columns([2, 1, 1], vertical_alignment="bottom")
 with toggles:
     show_shading = st.toggle("Profit / loss shading", value=True)
     show_sweet_spot = st.toggle("Sweet spot", value=False)
+    show_systems = st.toggle("Trading systems", value=False)
 
 rr_lo = lo_col.number_input(
     "Min RR",
@@ -42,7 +54,7 @@ rr_hi = hi_col.number_input(
     "Max RR",
     min_value=RR_MIN,
     max_value=RR_MAX,
-    value=5.0,
+    value=4.5,
     step=0.1,
     disabled=not show_sweet_spot,
 )
@@ -50,6 +62,75 @@ rr_hi = hi_col.number_input(
 if show_sweet_spot and rr_hi <= rr_lo:
     st.warning("Max RR must be greater than Min RR.")
     show_sweet_spot = False
+
+# Rendered at the end, once the trading systems below are known.
+chart_slot = st.container()
+
+st.subheader("Trading systems")
+
+input_col, bar_col = st.columns(2)
+
+with input_col:
+    edited = st.data_editor(
+        DEFAULT_SYSTEMS,
+        key="systems_editor",
+        hide_index=True,
+        num_rows="fixed",
+        column_config={
+            "System": st.column_config.TextColumn("System", width="small"),
+            "RR": st.column_config.NumberColumn(
+                "RR", min_value=0.1, max_value=RR_MAX, step=0.1, format="%.1f"
+            ),
+            "Win rate (%)": st.column_config.NumberColumn(
+                "Win rate (%)", min_value=0.0, max_value=100.0, step=1.0, format="%.1f"
+            ),
+        },
+    )
+    st.caption("Clear a row's numbers to leave it out.")
+
+systems = edited.dropna(subset=["RR", "Win rate (%)"]).copy()
+if not systems.empty:
+    systems["Expectancy (R)"] = [
+        expectancy_from_rr(wr / 100, rr)
+        for rr, wr in zip(systems["RR"], systems["Win rate (%)"], strict=True)
+    ]
+    systems["Label"] = [
+        f"{name}<br>{rr:.1f}R · {wr:.0f}%"
+        for name, rr, wr in zip(
+            systems["System"], systems["RR"], systems["Win rate (%)"], strict=True
+        )
+    ]
+
+with bar_col:
+    if systems.empty:
+        st.info("Enter at least one system to see its expectancy.")
+    else:
+        bar = go.Figure(
+            go.Bar(
+                x=systems["Label"],
+                y=systems["Expectancy (R)"],
+                marker_color=[
+                    POSITIVE_COLOR if e > 0 else SYSTEM_COLOR
+                    for e in systems["Expectancy (R)"]
+                ],
+                text=[f"{e:+.2f}R" for e in systems["Expectancy (R)"]],
+                textposition="outside",
+                hovertemplate="%{x}<br>%{y:+.3f}R per trade<extra></extra>",
+            )
+        )
+        bar.add_hline(y=0, line_width=1, line_color=GRID_COLOR)
+        bar.update_layout(
+            height=330,
+            showlegend=False,
+            margin=dict(t=30, r=20, b=60, l=60),
+        )
+        bar.update_yaxes(
+            title="Expectancy (R per trade)",
+            gridcolor="rgba(128,128,128,0.2)",
+            zeroline=False,
+        )
+        bar.update_xaxes(title="", tickfont=dict(size=12))
+        st.plotly_chart(bar, width="stretch")
 
 curve = breakeven_curve(RR_MIN, RR_MAX)
 marks = breakeven_points(LABEL_POINTS)
@@ -105,6 +186,28 @@ fig.add_trace(
     )
 )
 
+if show_systems and not systems.empty:
+    fig.add_trace(
+        go.Scatter(
+            x=systems["RR"],
+            y=systems["Win rate (%)"],
+            mode="markers+text",
+            marker=dict(
+                size=13,
+                color=SYSTEM_COLOR,
+                line=dict(width=1.5, color="white"),
+            ),
+            text=systems["System"],
+            textposition="middle right",
+            textfont=dict(size=13, color=SYSTEM_COLOR),
+            customdata=systems["Expectancy (R)"],
+            hovertemplate=(
+                "%{text}<br>RR %{x:.1f} at %{y:.1f}%"
+                "<br>Expectancy %{customdata:+.3f}R<extra></extra>"
+            ),
+        )
+    )
+
 for r in GRID_POINTS:
     fig.add_vline(x=r, line_width=1, line_color=GRID_COLOR, layer="below")
 
@@ -142,4 +245,5 @@ fig.update_yaxes(
     gridcolor="rgba(128,128,128,0.2)",
 )
 
-st.plotly_chart(fig, width="stretch")
+with chart_slot:
+    st.plotly_chart(fig, width="stretch")
