@@ -1,9 +1,13 @@
+import numpy as np
 import pytest
 
 from tfcore.expectancy import (
     ExpectancyInputs,
+    breakeven_curve,
+    breakeven_points,
     breakeven_win_rate,
     expectancy,
+    required_win_rate,
     reward_to_risk,
 )
 
@@ -61,3 +65,58 @@ def test_rejects_impossible_win_rate(bad_rate):
 def test_rejects_negative_avg_loss():
     with pytest.raises(ValueError, match="avg_loss"):
         ExpectancyInputs(win_rate=0.5, avg_win=2.0, avg_loss=-1.0)
+
+
+@pytest.mark.parametrize(
+    ("rr", "expected"),
+    [(0.5, 2 / 3), (1.0, 0.5), (2.0, 1 / 3), (3.0, 0.25), (10.0, 1 / 11)],
+)
+def test_required_win_rate(rr, expected):
+    assert required_win_rate(rr) == pytest.approx(expected)
+
+
+def test_required_win_rate_matches_breakeven_win_rate():
+    """Both must describe the same thing -- rr is just avg_win at avg_loss=1."""
+    for rr in [0.5, 1.0, 2.5, 7.0, 10.0]:
+        assert required_win_rate(rr) == pytest.approx(breakeven_win_rate(rr, 1.0))
+
+
+def test_breakeven_curve_shape_and_bounds():
+    curve = breakeven_curve(0.5, 10.0, n_points=100)
+    assert list(curve.columns) == ["rr", "win_rate"]
+    assert len(curve) == 100
+    assert curve["rr"].iloc[0] == pytest.approx(0.5)
+    assert curve["rr"].iloc[-1] == pytest.approx(10.0)
+    assert curve["win_rate"].between(0, 1).all()
+
+
+def test_breakeven_curve_decreases_monotonically():
+    """Better reward-to-risk must always mean a lower required win rate."""
+    curve = breakeven_curve(0.5, 10.0, n_points=200)
+    assert np.all(np.diff(curve["win_rate"]) < 0)
+
+
+def test_breakeven_curve_points_are_zero_expectancy():
+    curve = breakeven_curve(0.5, 10.0, n_points=25)
+    for rr, wr in zip(curve["rr"], curve["win_rate"], strict=True):
+        assert expectancy(ExpectancyInputs(wr, rr, 1.0)) == pytest.approx(0.0)
+
+
+def test_breakeven_points_at_integers():
+    pts = breakeven_points(range(1, 11))
+    assert len(pts) == 10
+    assert pts["win_rate"].iloc[0] == pytest.approx(0.5)
+    assert pts["win_rate"].iloc[-1] == pytest.approx(1 / 11)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        ({"rr_min": 0.0}, "rr_min"),
+        ({"rr_min": 5.0, "rr_max": 2.0}, "rr_max"),
+        ({"n_points": 1}, "n_points"),
+    ],
+)
+def test_breakeven_curve_rejects_bad_ranges(kwargs, match):
+    with pytest.raises(ValueError, match=match):
+        breakeven_curve(**kwargs)

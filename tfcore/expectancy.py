@@ -5,7 +5,11 @@ trade. Working in R rather than currency makes systems comparable regardless of
 account size.
 """
 
+from collections.abc import Iterable
 from dataclasses import dataclass
+
+import numpy as np
+import pandas as pd
 
 
 @dataclass(frozen=True)
@@ -59,3 +63,40 @@ def reward_to_risk(inputs: ExpectancyInputs) -> float:
     if inputs.avg_loss == 0:
         raise ValueError("avg_loss cannot be zero")
     return inputs.avg_win / inputs.avg_loss
+
+
+def required_win_rate(rr: float) -> float:
+    """Win rate needed to break even at a given reward-to-risk ratio.
+
+    `rr` is reward per 1R risked, so rr=2 means a 2R win against a 1R loss.
+    Equivalent to `breakeven_win_rate(rr, 1.0)`.
+    """
+    if rr <= 0:
+        raise ValueError(f"rr must be positive, got {rr}")
+    return 1.0 / (1.0 + rr)
+
+
+def breakeven_curve(
+    rr_min: float = 0.5, rr_max: float = 10.0, n_points: int = 400
+) -> pd.DataFrame:
+    """Required win rate across a range of reward-to-risk ratios.
+
+    Columns: `rr`, `win_rate` (a fraction between 0 and 1).
+    """
+    if rr_min <= 0:
+        raise ValueError(f"rr_min must be positive, got {rr_min}")
+    if rr_max <= rr_min:
+        raise ValueError(f"rr_max must exceed rr_min, got {rr_max} <= {rr_min}")
+    if n_points < 2:
+        raise ValueError(f"n_points must be at least 2, got {n_points}")
+
+    rr = np.linspace(rr_min, rr_max, n_points)
+    return pd.DataFrame({"rr": rr, "win_rate": 1.0 / (1.0 + rr)})
+
+
+def breakeven_points(rr_values: Iterable[float]) -> pd.DataFrame:
+    """Required win rate at specific reward-to-risk ratios, for labelling."""
+    rr = np.asarray(list(rr_values), dtype=float)
+    if np.any(rr <= 0):
+        raise ValueError("all rr values must be positive")
+    return pd.DataFrame({"rr": rr, "win_rate": 1.0 / (1.0 + rr)})
