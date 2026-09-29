@@ -4,6 +4,9 @@ Small Streamlit apps for exploring trading fundamentals, starting with trade
 expectancy. Everything runs locally in your browser and **requires no admin
 rights**.
 
+> New to any of this? [HOW_IT_WORKS.md](HOW_IT_WORKS.md) explains what virtual
+> environments, packages, and Streamlit actually are, in plain language.
+
 ---
 
 ## 1. Prerequisites
@@ -17,7 +20,7 @@ rights**.
 ### Don't have Python? (still no admin needed)
 
 Pick one:
-https://github.com/RafaelArgiro/TradingFundamentals.git
+
 - **python.org installer** — download Python 3.12 for Windows, run it, and
   **untick "Install for all users"** / tick **"Install just for me"**. It lands
   in `%LOCALAPPDATA%\Programs\Python` and never prompts for admin.
@@ -41,7 +44,7 @@ Run these **once**, from wherever you keep your projects.
 ### Step 1 — Get the code
 
 ```powershell
-git clone <your-repo-url> TradingFundamentals
+git clone https://github.com/RafaelArgiro/TradingFundamentals.git
 cd TradingFundamentals
 ```
 
