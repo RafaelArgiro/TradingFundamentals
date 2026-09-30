@@ -232,6 +232,9 @@ else:
         }
 
         def tornado_figure(parameter: str, dev: int, title: str) -> go.Figure:
+            is_win_rate = parameter == "win_rate"
+            param_unit = "%" if is_win_rate else "R"
+
             bars = []
             for name, rr, wr, base in zip(
                 chosen["System"],
@@ -243,14 +246,17 @@ else:
                 low, high = sensitivity_range(wr / 100, rr, parameter, dev)
                 if normalize:
                     low, high, base = low / base * 100, high / base * 100, 100.0
-                bars.append((str(name), low, high, base))
+
+                nominal = wr if is_win_rate else rr
+                bars.append((str(name), low, high, base, nominal * dev / 100))
 
             unit = "%" if normalize else "R"
             places = 0 if normalize else 2
             delta_places = 0 if normalize else 3
 
             fig = go.Figure()
-            for name, low, high, base in bars:
+            for name, low, high, base, param_step in bars:
+                param_text = f"{param_step:.3g}{param_unit}"
                 fig.add_trace(
                     go.Bar(
                         y=[name],
@@ -261,8 +267,14 @@ else:
                         legendgroup=name,
                         marker_color=colors[name],
                         marker_line=dict(width=0),
+                        text=[param_text],
+                        textposition="inside",
+                        insidetextanchor="start",
+                        constraintext="none",
+                        textfont=dict(size=12, color="white"),
                         hovertemplate=(
                             f"{name} · {title} ±{dev}%<br>"
+                            f"{title} shift ±{param_text}<br>"
                             f"Change {low - base:+.{delta_places}f} to "
                             f"{high - base:+.{delta_places}f}{unit}<br>"
                             f"Expectancy {low:+.{places}f} to {high:+.{places}f}{unit}"
@@ -337,12 +349,6 @@ else:
         with rr_col:
             st.plotly_chart(tornado_figure("rr", rr_dev, "RR"), width="stretch")
 
-        st.caption(
-            "Each bar shows where expectancy lands if that one parameter is off by "
-            "the chosen amount. The tick marks the unchanged value, and the red "
-            "line is break-even — **a bar crossing it means that error alone can "
-            "wipe out the edge.** Longer bars mean greater sensitivity."
-        )
 
 curve = breakeven_curve(RR_MIN, RR_MAX)
 marks = breakeven_points(LABEL_POINTS)
