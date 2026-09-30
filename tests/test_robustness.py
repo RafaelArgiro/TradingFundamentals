@@ -4,7 +4,10 @@ from tfcore.expectancy import expectancy_from_rr
 from tfcore.robustness import (
     critical_rr,
     critical_win_rate,
+    elasticity_rr,
+    elasticity_win_rate,
     rr_buffer,
+    sensitivity_range,
     win_rate_buffer,
 )
 
@@ -57,3 +60,57 @@ def test_rr_buffer_scales_to_expectancy():
 def test_rejects_zero_win_rate():
     with pytest.raises(ValueError, match="win_rate"):
         critical_rr(0.0)
+
+
+def test_elasticity_win_rate_matches_worked_example():
+    assert elasticity_win_rate(0.45, 2.0) == pytest.approx(1.35 / 0.35)
+
+
+def test_elasticity_rr_matches_worked_example():
+    assert elasticity_rr(0.45, 2.0) == pytest.approx(0.9 / 0.35)
+
+
+def test_win_rate_is_always_the_more_elastic_parameter():
+    """The ratio must equal 1 + 1/R for any profitable system."""
+    for wr, rr in [(0.45, 2.0), (0.7, 0.5), (0.22, 5.0), (0.55, 1.0)]:
+        ratio = elasticity_win_rate(wr, rr) / elasticity_rr(wr, rr)
+        assert ratio == pytest.approx(1 + 1 / rr)
+        assert ratio > 1
+
+
+def test_relative_tolerance_is_inverse_elasticity():
+    """1/e must equal the relative drop that takes the system to break-even."""
+    for wr, rr in [(0.45, 2.0), (0.7, 0.5), (0.22, 5.0)]:
+        tolerated = win_rate_buffer(wr, rr) / wr
+        assert tolerated == pytest.approx(1 / elasticity_win_rate(wr, rr))
+
+        tolerated_rr = rr_buffer(wr, rr) / rr
+        assert tolerated_rr == pytest.approx(1 / elasticity_rr(wr, rr))
+
+
+def test_elasticity_diverges_near_breakeven():
+    just_above = critical_win_rate(2.0) + 1e-4
+    assert elasticity_win_rate(just_above, 2.0) > 1000
+
+
+def test_sensitivity_range_brackets_the_baseline():
+    base = expectancy_from_rr(0.45, 2.0)
+    lo, hi = sensitivity_range(0.45, 2.0, "win_rate", 10)
+    assert lo < base < hi
+
+
+def test_sensitivity_range_caps_win_rate_at_one():
+    lo, hi = sensitivity_range(0.95, 2.0, "win_rate", 50)
+    assert hi == pytest.approx(expectancy_from_rr(1.0, 2.0))
+    assert lo < hi
+
+
+def test_sensitivity_to_win_rate_exceeds_sensitivity_to_rr():
+    wr_lo, wr_hi = sensitivity_range(0.45, 2.0, "win_rate", 10)
+    rr_lo, rr_hi = sensitivity_range(0.45, 2.0, "rr", 10)
+    assert (wr_hi - wr_lo) > (rr_hi - rr_lo)
+
+
+def test_sensitivity_range_rejects_unknown_parameter():
+    with pytest.raises(ValueError, match="parameter"):
+        sensitivity_range(0.45, 2.0, "drawdown", 10)  # type: ignore[arg-type]

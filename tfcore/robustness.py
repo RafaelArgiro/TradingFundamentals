@@ -1,10 +1,14 @@
 """How much room a system has before its edge disappears.
 
-All Tier 1 measures: distances from the current parameters to the break-even
-point, in the units a trader thinks in.
+Tier 1 measures are distances to the break-even point in trader units; the
+elasticity measures express the same thing as a percentage response.
 """
 
-from tfcore.expectancy import required_win_rate
+from typing import Literal
+
+from tfcore.expectancy import expectancy_from_rr, required_win_rate
+
+Parameter = Literal["win_rate", "rr"]
 
 
 def critical_win_rate(rr: float) -> float:
@@ -27,3 +31,44 @@ def win_rate_buffer(win_rate: float, rr: float) -> float:
 def rr_buffer(win_rate: float, rr: float) -> float:
     """How much R the average win can shrink before breaking even."""
     return rr - critical_rr(win_rate)
+
+
+def elasticity_win_rate(win_rate: float, rr: float) -> float:
+    """Percent change in expectancy per 1% change in win rate."""
+    edge = expectancy_from_rr(win_rate, rr)
+    if edge == 0:
+        raise ValueError("elasticity is undefined at break-even")
+    return (edge + 1) / edge
+
+
+def elasticity_rr(win_rate: float, rr: float) -> float:
+    """Percent change in expectancy per 1% change in reward-to-risk."""
+    edge = expectancy_from_rr(win_rate, rr)
+    if edge == 0:
+        raise ValueError("elasticity is undefined at break-even")
+    return win_rate * rr / edge
+
+
+def sensitivity_range(
+    win_rate: float, rr: float, parameter: Parameter, pct: float
+) -> tuple[float, float]:
+    """Expectancy when `parameter` moves down and up by `pct` percent.
+
+    Returns `(low, high)`. Win rate is capped at 100%, so a large upward
+    deviation cannot produce an impossible system.
+    """
+    if not 0 < pct <= 100:
+        raise ValueError(f"pct must be in (0, 100], got {pct}")
+
+    lo_factor, hi_factor = 1 - pct / 100, 1 + pct / 100
+
+    if parameter == "win_rate":
+        lo = expectancy_from_rr(win_rate * lo_factor, rr)
+        hi = expectancy_from_rr(min(win_rate * hi_factor, 1.0), rr)
+    elif parameter == "rr":
+        lo = expectancy_from_rr(win_rate, rr * lo_factor)
+        hi = expectancy_from_rr(win_rate, rr * hi_factor)
+    else:
+        raise ValueError(f"unknown parameter: {parameter}")
+
+    return lo, hi
