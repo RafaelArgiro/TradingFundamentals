@@ -8,6 +8,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from tfcore.expectancy import breakeven_curve, breakeven_points, expectancy_from_rr
+from tfcore.robustness import critical_rr, critical_win_rate, rr_buffer, win_rate_buffer
 
 RR_MIN, RR_MAX = 0.2, 10.0
 LABEL_POINTS = (0.5, *range(1, 11))
@@ -131,6 +132,55 @@ with bar_col:
         )
         bar.update_xaxes(title="", tickfont=dict(size=12))
         st.plotly_chart(bar, width="stretch")
+
+st.subheader("Robustness")
+
+if systems.empty:
+    st.info("Enter at least one system to see its robustness.")
+else:
+    robustness = pd.DataFrame(
+        {
+            "System": systems["System"],
+            "RR": systems["RR"],
+            "Win rate (%)": systems["Win rate (%)"],
+            "Expectancy (R)": systems["Expectancy (R)"],
+            "Critical WR (%)": [critical_win_rate(rr) * 100 for rr in systems["RR"]],
+            "WR buffer (pp)": [
+                win_rate_buffer(wr / 100, rr) * 100
+                for rr, wr in zip(systems["RR"], systems["Win rate (%)"], strict=True)
+            ],
+            "Critical RR": [critical_rr(wr / 100) for wr in systems["Win rate (%)"]],
+            "RR buffer (R)": [
+                rr_buffer(wr / 100, rr)
+                for rr, wr in zip(systems["RR"], systems["Win rate (%)"], strict=True)
+            ],
+        }
+    )
+
+    st.dataframe(
+        robustness,
+        hide_index=True,
+        width="stretch",
+        column_config={
+            "RR": st.column_config.NumberColumn(format="%.1f"),
+            "Win rate (%)": st.column_config.NumberColumn(format="%.1f"),
+            "Expectancy (R)": st.column_config.NumberColumn(format="%+.3f"),
+            "Critical WR (%)": st.column_config.NumberColumn(
+                format="%.1f", help="Win rate at which expectancy hits zero."
+            ),
+            "WR buffer (pp)": st.column_config.NumberColumn(
+                format="%+.1f",
+                help="Percentage points the win rate can fall before breaking even.",
+            ),
+            "Critical RR": st.column_config.NumberColumn(
+                format="%.2f", help="Reward-to-risk at which expectancy hits zero."
+            ),
+            "RR buffer (R)": st.column_config.NumberColumn(
+                format="%+.2f",
+                help="How much R the average win can shrink before breaking even.",
+            ),
+        },
+    )
 
 curve = breakeven_curve(RR_MIN, RR_MAX)
 marks = breakeven_points(LABEL_POINTS)
