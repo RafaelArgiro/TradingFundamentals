@@ -211,14 +211,8 @@ st.latex(
 )
 
 st.markdown(
-    """
-with $W$ the win rate and $R$ the reward-to-risk ratio. Setting $E = 0$ and
-solving for $W$ gives the **break-even win rate**:
-"""
+    "with $W$ the win rate and $R$ the reward-to-risk ratio."
 )
-
-st.latex(r"W^{*} = \frac{1}{1 + R}")
-
 
 st.markdown(
     """
@@ -239,7 +233,41 @@ st.divider()
 
 st.subheader("Break-even line")
 
-st.latex(r"\text{Break-even win rate} = \frac{1}{1 + R}")
+st.markdown(
+    """
+Setting $E = 0$ and solving for $W$ gives the win rate a system needs just to
+stand still. Below the curve every system loses money, above it every system
+makes money, and the dotted grey lines mark fixed levels of expectancy above
+break-even.
+"""
+)
+
+st.latex(r"\text{Break-even win rate} = W^{*} = \frac{1}{1 + R}")
+
+with st.expander("Derivation"):
+    st.markdown("Start from expectancy, with the average loss fixed at 1R:")
+    st.latex(r"E = W \cdot R - (1 - W) \cdot 1")
+
+    st.markdown("Expand the loss term:")
+    st.latex(r"E = W R - 1 + W")
+
+    st.markdown("Collect the two $W$ terms:")
+    st.latex(r"E = W\,(R + 1) - 1")
+
+    st.markdown("Break-even means earning nothing per trade, so set $E = 0$:")
+    st.latex(r"W\,(R + 1) - 1 = 0")
+
+    st.markdown("Move the constant across:")
+    st.latex(r"W\,(R + 1) = 1")
+
+    st.markdown("And divide by $(R + 1)$:")
+    st.latex(r"W^{*} = \frac{1}{1 + R}")
+
+    st.markdown(
+        "Solving the same equation for $R$ instead gives the mirror image — the "
+        "reward-to-risk a given win rate needs:"
+    )
+    st.latex(r"R^{*} = \frac{1 - W}{W}")
 
 toggles, lo_col, hi_col = st.columns([2, 1, 1], vertical_alignment="bottom")
 
