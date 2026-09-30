@@ -383,12 +383,13 @@ how far a parameter can drift before the edge is gone.
 
 st.markdown(
     """
-| Column | Meaning |
-| --- | --- |
-| **Critical WR** | The win rate at which expectancy reaches zero, for this system's RR. |
-| **WR buffer** | Percentage points the win rate can fall before that happens. Bigger is safer. |
-| **Critical RR** | The reward-to-risk at which expectancy reaches zero, for this system's win rate. |
-| **RR buffer** | How much R the average win can shrink before that happens. |
+- **Critical WR** — the win rate at which expectancy reaches zero, for this
+  system's RR.
+- **WR buffer** — percentage points the win rate can fall before that happens.
+  Bigger is safer.
+- **Critical RR** — the reward-to-risk at which expectancy reaches zero, for
+  this system's win rate.
+- **RR buffer** — how much R the average win can shrink before that happens.
 """
 )
 
