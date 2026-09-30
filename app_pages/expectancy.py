@@ -373,6 +373,57 @@ st.divider()
 
 st.subheader("Robustness")
 
+st.markdown(
+    """
+Expectancy says whether a system works; robustness says how much room it has
+before it stops working. Each measure below is a **distance to break-even** —
+how far a parameter can drift before the edge is gone.
+"""
+)
+
+st.markdown(
+    """
+| Column | Meaning |
+| --- | --- |
+| **Critical WR** | The win rate at which expectancy reaches zero, for this system's RR. |
+| **WR buffer** | Percentage points the win rate can fall before that happens. Bigger is safer. |
+| **Critical RR** | The reward-to-risk at which expectancy reaches zero, for this system's win rate. |
+| **RR buffer** | How much R the average win can shrink before that happens. |
+"""
+)
+
+with st.expander("Derivation"):
+    st.markdown(
+        "Both critical values are the break-even equation solved for one "
+        "parameter while the other is held fixed:"
+    )
+    st.latex(r"W^{*} = \frac{1}{1 + R} \qquad R^{*} = \frac{1 - W}{W}")
+
+    st.markdown("A buffer is simply the distance from today's value to that point:")
+    st.latex(
+        r"\text{WR buffer} = W - W^{*} \qquad \text{RR buffer} = R - R^{*}"
+    )
+
+    st.markdown(
+        "The buffers are not merely *related* to expectancy — they are "
+        "expectancy, rescaled. Starting from $E = W(R+1) - 1$ and factoring out "
+        "$(R+1)$:"
+    )
+    st.latex(
+        r"E = (R + 1)\left(W - \frac{1}{R + 1}\right) = (R + 1)\,(W - W^{*})"
+    )
+
+    st.markdown("Doing the same with $W$ factored out instead:")
+    st.latex(
+        r"E = W\left(R - \frac{1 - W}{W}\right) = W\,(R - R^{*})"
+    )
+
+    st.markdown(
+        """
+So $E = (R+1) \\times \\text{WR buffer} = W \\times \\text{RR buffer}$.
+
+    )
+
 if systems.empty:
     st.info("Enter at least one system to see its robustness.")
 else:
