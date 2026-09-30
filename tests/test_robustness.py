@@ -2,6 +2,7 @@ import pytest
 
 from tfcore.expectancy import expectancy_from_rr
 from tfcore.robustness import (
+    absolute_sensitivity_range,
     critical_rr,
     critical_win_rate,
     elasticity_rr,
@@ -114,3 +115,41 @@ def test_sensitivity_to_win_rate_exceeds_sensitivity_to_rr():
 def test_sensitivity_range_rejects_unknown_parameter():
     with pytest.raises(ValueError, match="parameter"):
         sensitivity_range(0.45, 2.0, "drawdown", 10)  # type: ignore[arg-type]
+
+
+def test_absolute_win_rate_shift_width_is_2_delta_times_r_plus_1():
+    """dE/dW = R + 1, so the bar width must be exactly 2 * delta * (R + 1)."""
+    delta = 0.05
+    for wr, rr in [(0.45, 2.0), (0.35, 3.0), (0.22, 5.0)]:
+        low, high = absolute_sensitivity_range(wr, rr, "win_rate", delta)
+        assert high - low == pytest.approx(2 * delta * (rr + 1))
+
+
+def test_absolute_rr_shift_width_is_2_delta_times_win_rate():
+    """dE/dR = W, so the bar width must be exactly 2 * delta * W."""
+    delta = 0.1
+    for wr, rr in [(0.45, 2.0), (0.7, 0.5), (0.22, 5.0)]:
+        low, high = absolute_sensitivity_range(wr, rr, "rr", delta)
+        assert high - low == pytest.approx(2 * delta * wr)
+
+
+def test_absolute_range_is_centred_on_the_baseline():
+    base = expectancy_from_rr(0.45, 2.0)
+    low, high = absolute_sensitivity_range(0.45, 2.0, "win_rate", 0.05)
+    assert (low + high) / 2 == pytest.approx(base)
+
+
+def test_absolute_range_clamps_win_rate():
+    low, high = absolute_sensitivity_range(0.97, 2.0, "win_rate", 0.10)
+    assert high == pytest.approx(expectancy_from_rr(1.0, 2.0))
+    assert low == pytest.approx(expectancy_from_rr(0.87, 2.0))
+
+
+def test_absolute_range_clamps_rr_at_zero():
+    low, _ = absolute_sensitivity_range(0.45, 0.05, "rr", 0.2)
+    assert low == pytest.approx(expectancy_from_rr(0.45, 0.0))
+
+
+def test_absolute_range_rejects_non_positive_delta():
+    with pytest.raises(ValueError, match="delta"):
+        absolute_sensitivity_range(0.45, 2.0, "win_rate", 0.0)

@@ -8,6 +8,8 @@ from tfcore.expectancy import (
     breakeven_win_rate,
     expectancy,
     expectancy_from_rr,
+    expectancy_vs_rr,
+    expectancy_vs_win_rate,
     required_win_rate,
     reward_to_risk,
 )
@@ -130,3 +132,30 @@ def test_breakeven_points_at_integers():
 def test_breakeven_curve_rejects_bad_ranges(kwargs, match):
     with pytest.raises(ValueError, match=match):
         breakeven_curve(**kwargs)
+
+
+def test_expectancy_vs_win_rate_is_a_straight_line():
+    """Slope must be exactly R + 1."""
+    curve = expectancy_vs_win_rate(2.0, n_points=50)
+    slopes = np.diff(curve["expectancy"]) / np.diff(curve["win_rate"])
+    assert np.allclose(slopes, 3.0)
+
+
+def test_expectancy_vs_win_rate_crosses_zero_at_breakeven():
+    curve = expectancy_vs_win_rate(3.0, n_points=1001)
+    crossing = curve.loc[curve["expectancy"].abs().idxmin(), "win_rate"]
+    assert crossing == pytest.approx(required_win_rate(3.0), abs=1e-3)
+
+
+def test_expectancy_vs_rr_is_a_straight_line():
+    """Slope must be exactly W."""
+    curve = expectancy_vs_rr(0.45, n_points=50)
+    slopes = np.diff(curve["expectancy"]) / np.diff(curve["rr"])
+    assert np.allclose(slopes, 0.45)
+
+
+def test_expectancy_curves_agree_at_the_shared_point():
+    by_win_rate = expectancy_vs_win_rate(2.0, n_points=3)
+    assert by_win_rate["expectancy"].iloc[-1] == pytest.approx(
+        expectancy_from_rr(1.0, 2.0)
+    )

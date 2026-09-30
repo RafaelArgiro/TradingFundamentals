@@ -72,3 +72,26 @@ def sensitivity_range(
         raise ValueError(f"unknown parameter: {parameter}")
 
     return lo, hi
+
+
+def absolute_sensitivity_range(
+    win_rate: float, rr: float, parameter: Parameter, delta: float
+) -> tuple[float, float]:
+    """Expectancy when `parameter` moves down and up by `delta` in its own units.
+
+    `delta` is a fraction for win rate (0.05 = 5 percentage points) and R for
+    reward-to-risk. Both parameters are clamped to their valid range.
+    """
+    if delta <= 0:
+        raise ValueError(f"delta must be positive, got {delta}")
+
+    if parameter == "win_rate":
+        lo = expectancy_from_rr(max(win_rate - delta, 0.0), rr)
+        hi = expectancy_from_rr(min(win_rate + delta, 1.0), rr)
+    elif parameter == "rr":
+        lo = expectancy_from_rr(win_rate, max(rr - delta, 0.0))
+        hi = expectancy_from_rr(win_rate, rr + delta)
+    else:
+        raise ValueError(f"unknown parameter: {parameter}")
+
+    return lo, hi

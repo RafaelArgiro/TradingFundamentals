@@ -109,3 +109,43 @@ def breakeven_points(rr_values: Iterable[float]) -> pd.DataFrame:
     if np.any(rr <= 0):
         raise ValueError("all rr values must be positive")
     return pd.DataFrame({"rr": rr, "win_rate": 1.0 / (1.0 + rr)})
+
+
+def expectancy_vs_win_rate(
+    rr: float,
+    win_rate_min: float = 0.0,
+    win_rate_max: float = 1.0,
+    n_points: int = 200,
+) -> pd.DataFrame:
+    """Expectancy across a range of win rates at fixed reward-to-risk.
+
+    Columns: `win_rate`, `expectancy`.
+    """
+    if rr < 0:
+        raise ValueError(f"rr must be positive, got {rr}")
+    if not 0 <= win_rate_min < win_rate_max <= 1:
+        raise ValueError("win_rate bounds must satisfy 0 <= min < max <= 1")
+
+    win_rate = np.linspace(win_rate_min, win_rate_max, n_points)
+    return pd.DataFrame(
+        {"win_rate": win_rate, "expectancy": win_rate * (rr + 1) - 1}
+    )
+
+
+def expectancy_vs_rr(
+    win_rate: float,
+    rr_min: float = 0.0,
+    rr_max: float = 10.0,
+    n_points: int = 200,
+) -> pd.DataFrame:
+    """Expectancy across a range of reward-to-risk ratios at fixed win rate.
+
+    Columns: `rr`, `expectancy`.
+    """
+    if not 0 <= win_rate <= 1:
+        raise ValueError(f"win_rate must be between 0 and 1, got {win_rate}")
+    if not 0 <= rr_min < rr_max:
+        raise ValueError("rr bounds must satisfy 0 <= min < max")
+
+    rr = np.linspace(rr_min, rr_max, n_points)
+    return pd.DataFrame({"rr": rr, "expectancy": win_rate * (rr + 1) - 1})

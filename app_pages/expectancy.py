@@ -7,8 +7,15 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from tfcore.expectancy import breakeven_curve, breakeven_points, expectancy_from_rr
+from tfcore.expectancy import (
+    breakeven_curve,
+    breakeven_points,
+    expectancy_from_rr,
+    expectancy_vs_rr,
+    expectancy_vs_win_rate,
+)
 from tfcore.robustness import (
+    absolute_sensitivity_range,
     critical_rr,
     critical_win_rate,
     rr_buffer,
@@ -41,6 +48,114 @@ DEFAULT_SYSTEMS = pd.DataFrame(
     }
 )
 
+def build_tornado(
+    bars: list[tuple[str, float, float, float, str]],
+    *,
+    title: str,
+    colors: dict,
+    x_title: str,
+    delta_places: int,
+    delta_unit: str,
+    tick_suffix: str = "",
+) -> go.Figure:
+    """Horizontal range bars, one per system.
+
+    Each entry is `(name, low, high, baseline, inside_label)`.
+    """
+    fig = go.Figure()
+
+    for name, low, high, base, inside in bars:
+        fig.add_trace(
+            go.Bar(
+                y=[name],
+                x=[high - low],
+                base=[low],
+                orientation="h",
+                name=name,
+                legendgroup=name,
+                marker_color=colors[name],
+                marker_line=dict(width=0),
+                text=[inside],
+                textposition="inside",
+                insidetextanchor="start",
+                constraintext="none",
+                textfont=dict(size=12, color="white"),
+                hovertemplate=(
+                    f"{name} · {title}<br>"
+                    f"Shift ±{inside}<br>"
+                    f"Change {low - base:+.{delta_places}f} to "
+                    f"{high - base:+.{delta_places}f}{delta_unit}<br>"
+                    f"Expectancy {low:+.{delta_places}f} to "
+                    f"{high:+.{delta_places}f}{delta_unit}"
+                    f"<br>Unchanged {base:+.{delta_places}f}{delta_unit}<extra></extra>"
+                ),
+            )
+        )
+        # Anchored outward from each end so narrow bars do not collide.
+        for value, anchor, pad in ((low, "right", -8), (high, "left", 8)):
+            fig.add_annotation(
+                x=value,
+                y=name,
+                text=f"{value - base:+.{delta_places}f}{delta_unit}",
+                showarrow=False,
+                xanchor=anchor,
+                xshift=pad,
+                font=dict(size=12, color=colors[name]),
+            )
+        fig.add_trace(
+            go.Scatter(
+                x=[base],
+                y=[name],
+                mode="markers",
+                marker=dict(
+                    symbol="line-ns-open", size=16, color="#444", line=dict(width=2)
+                ),
+                showlegend=False,
+                hoverinfo="skip",
+            )
+        )
+
+    fig.add_vline(x=0, line_width=2, line_color=SYSTEM_COLOR)
+    fig.update_layout(
+        title=dict(text=title, font=dict(size=16)),
+        height=150 + 48 * len(bars),
+        barmode="overlay",
+        bargap=0.45,
+        margin=dict(t=80, r=55, b=50, l=10),
+        legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="left", x=0),
+    )
+    fig.update_xaxes(
+        title=x_title,
+        ticksuffix=tick_suffix,
+        showgrid=True,
+        gridcolor="rgba(128,128,128,0.35)",
+        griddash="dot",
+        zeroline=False,
+    )
+    # Plotly stacks categories bottom-up, so reverse to get A at the top.
+    fig.update_yaxes(
+        title="",
+        tickfont=dict(size=13),
+        categoryorder="array",
+        categoryarray=[b[0] for b in reversed(bars)],
+    )
+    return fig
+
+
+def system_colors(names) -> dict:
+    return {
+        name: SYSTEM_PALETTE[i % len(SYSTEM_PALETTE)] for i, name in enumerate(names)
+    }
+
+
+def include_picker(names, key_prefix: str) -> list:
+    st.caption("Include system")
+    with st.container(horizontal=True):
+        return [
+            name
+            for i, name in enumerate(names)
+            if st.checkbox(str(name), value=True, key=f"{key_prefix}_{i}")
+        ]
 st.latex(r"\text{Break-even win rate} = \frac{1}{1 + RR}")
 
 toggles, lo_col, hi_col = st.columns([2, 1, 1], vertical_alignment="bottom")
@@ -204,13 +319,7 @@ else:
             value=False,
             help="Aligns every system at 100% so relative sensitivity is comparable.",
         )
-        st.caption("Include system")
-        with st.container(horizontal=True):
-            included = [
-                name
-                for i, name in enumerate(systems["System"])
-                if st.checkbox(str(name), value=True, key=f"tornado_include_{i}")
-            ]
+        included = include_picker(systems["System"], "tornado_include")
 
     chosen = systems[systems["System"].isin(included)]
 
@@ -226,16 +335,12 @@ else:
     if chosen.empty:
         st.info("Select at least one system.")
     else:
-        colors = {
-            name: SYSTEM_PALETTE[i % len(SYSTEM_PALETTE)]
-            for i, name in enumerate(systems["System"])
-        }
+        colors = system_colors(systems["System"])
 
-        def tornado_figure(parameter: str, dev: int, title: str) -> go.Figure:
+        def relative_bars(parameter: str, dev: int) -> list:
             is_win_rate = parameter == "win_rate"
             param_unit = "%" if is_win_rate else "R"
-
-            bars = []
+            rows = []
             for name, rr, wr, base in zip(
                 chosen["System"],
                 chosen["RR"],
@@ -246,108 +351,255 @@ else:
                 low, high = sensitivity_range(wr / 100, rr, parameter, dev)
                 if normalize:
                     low, high, base = low / base * 100, high / base * 100, 100.0
+                step = (wr if is_win_rate else rr) * dev / 100
+                rows.append((str(name), low, high, base, f"{step:.3g}{param_unit}"))
+            return rows
 
-                nominal = wr if is_win_rate else rr
-                bars.append((str(name), low, high, base, nominal * dev / 100))
-
-            unit = "%" if normalize else "R"
-            places = 0 if normalize else 2
-            delta_places = 0 if normalize else 3
-
-            fig = go.Figure()
-            for name, low, high, base, param_step in bars:
-                param_text = f"{param_step:.3g}{param_unit}"
-                fig.add_trace(
-                    go.Bar(
-                        y=[name],
-                        x=[high - low],
-                        base=[low],
-                        orientation="h",
-                        name=name,
-                        legendgroup=name,
-                        marker_color=colors[name],
-                        marker_line=dict(width=0),
-                        text=[param_text],
-                        textposition="inside",
-                        insidetextanchor="start",
-                        constraintext="none",
-                        textfont=dict(size=12, color="white"),
-                        hovertemplate=(
-                            f"{name} · {title} ±{dev}%<br>"
-                            f"{title} shift ±{param_text}<br>"
-                            f"Change {low - base:+.{delta_places}f} to "
-                            f"{high - base:+.{delta_places}f}{unit}<br>"
-                            f"Expectancy {low:+.{places}f} to {high:+.{places}f}{unit}"
-                            f"<br>Unchanged {base:+.{places}f}{unit}<extra></extra>"
-                        ),
-                    )
-                )
-                # Anchored outward from each end so narrow bars do not collide.
-                for value, anchor, pad in ((low, "right", -8), (high, "left", 8)):
-                    fig.add_annotation(
-                        x=value,
-                        y=name,
-                        text=f"{value - base:+.{delta_places}f}{unit}",
-                        showarrow=False,
-                        xanchor=anchor,
-                        xshift=pad,
-                        font=dict(size=12, color=colors[name]),
-                    )
-                fig.add_trace(
-                    go.Scatter(
-                        x=[base],
-                        y=[name],
-                        mode="markers",
-                        marker=dict(
-                            symbol="line-ns-open",
-                            size=16,
-                            color="#444",
-                            line=dict(width=2),
-                        ),
-                        showlegend=False,
-                        hoverinfo="skip",
-                    )
-                )
-
-            fig.add_vline(x=0, line_width=2, line_color=SYSTEM_COLOR)
-            fig.update_layout(
-                title=dict(text=f"{title} ±{dev}%", font=dict(size=16)),
-                height=150 + 48 * len(bars),
-                barmode="overlay",
-                bargap=0.45,
-                margin=dict(t=80, r=55, b=50, l=10),
-                legend=dict(
-                    orientation="h", yanchor="bottom", y=1.0, xanchor="left", x=0
-                ),
-            )
-            fig.update_xaxes(
-                title=(
-                    "Expectancy (% of unchanged)"
-                    if normalize
-                    else "Expectancy (R per trade)"
-                ),
-                ticksuffix="%" if normalize else "",
-                showgrid=True,
-                gridcolor="rgba(128,128,128,0.35)",
-                griddash="dot",
-                zeroline=False,
-            )
-            # Plotly stacks categories bottom-up, so reverse to get A at the top.
-            fig.update_yaxes(
-                title="",
-                tickfont=dict(size=13),
-                categoryorder="array",
-                categoryarray=[b[0] for b in reversed(bars)],
-            )
-            return fig
+        x_title = (
+            "Expectancy (% of unchanged)" if normalize else "Expectancy (R per trade)"
+        )
+        shared = dict(
+            colors=colors,
+            x_title=x_title,
+            delta_places=0 if normalize else 3,
+            delta_unit="%" if normalize else "R",
+            tick_suffix="%" if normalize else "",
+        )
 
         wr_col, rr_col = st.columns(2)
         with wr_col:
             st.plotly_chart(
-                tornado_figure("win_rate", wr_dev, "Win rate"), width="stretch"
+                build_tornado(
+                    relative_bars("win_rate", wr_dev),
+                    title=f"Win rate ±{wr_dev}%",
+                    **shared,
+                ),
+                width="stretch",
             )
         with rr_col:
-            st.plotly_chart(tornado_figure("rr", rr_dev, "RR"), width="stretch")
+            st.plotly_chart(
+                build_tornado(
+                    relative_bars("rr", rr_dev), title=f"RR ±{rr_dev}%", **shared
+                ),
+                width="stretch",
+            )
+
+        st.caption(
+            "Each bar shows where expectancy lands if that one parameter is off by "
+            "the chosen amount. The tick marks the unchanged value, and the red "
+            "line is break-even — **a bar crossing it means that error alone can "
+            "wipe out the edge.** Longer bars mean greater sensitivity."
+        )
+
+st.subheader("Absolute sensitivity")
+
+if systems.empty:
+    st.info("Enter at least one system to see its sensitivity.")
+else:
+    abs_wr, abs_rr, abs_pick = st.columns([1, 1, 2], vertical_alignment="bottom")
+    wr_shift = abs_wr.number_input(
+        "Win rate shift (pp)", min_value=0.5, max_value=25.0, value=5.0, step=0.5
+    )
+    rr_shift = abs_rr.number_input(
+        "RR shift (R)", min_value=0.05, max_value=3.0, value=0.1, step=0.05
+    )
+    with abs_pick:
+        abs_included = include_picker(systems["System"], "absolute_include")
+
+    picked = systems[systems["System"].isin(abs_included)]
+
+    if picked.empty:
+        st.info("Select at least one system.")
+    else:
+        abs_colors = system_colors(systems["System"])
+
+        def absolute_bars(parameter: str, delta: float) -> list:
+            is_win_rate = parameter == "win_rate"
+            rows = []
+            for name, rr, wr, base in zip(
+                picked["System"],
+                picked["RR"],
+                picked["Win rate (%)"],
+                picked["Expectancy (R)"],
+                strict=True,
+            ):
+                low, high = absolute_sensitivity_range(wr / 100, rr, parameter, delta)
+                nominal = wr / 100 if is_win_rate else rr
+                rows.append(
+                    (str(name), low, high, base, f"{delta / nominal * 100:.3g}%")
+                )
+            return rows
+
+        abs_shared = dict(
+            colors=abs_colors,
+            x_title="Expectancy (R per trade)",
+            delta_places=3,
+            delta_unit="R",
+        )
+
+        abs_left, abs_right = st.columns(2)
+        with abs_left:
+            st.plotly_chart(
+                build_tornado(
+                    absolute_bars("win_rate", wr_shift / 100),
+                    title=f"Win rate ±{wr_shift:g} pp",
+                    **abs_shared,
+                ),
+                width="stretch",
+            )
+        with abs_right:
+            st.plotly_chart(
+                build_tornado(
+                    absolute_bars("rr", rr_shift),
+                    title=f"RR ±{rr_shift:g}R",
+                    **abs_shared,
+                ),
+                width="stretch",
+            )
+
+        st.caption(
+            "The same shift is applied to every system, so bar length is directly "
+            "comparable. Win rate bars all have width "
+            f"2 × {wr_shift:g}pp × (R+1), so higher-RR systems react more; RR bars "
+            f"all have width 2 × {rr_shift:g}R × W, so higher-win-rate systems react "
+            "more."
+        )
+
+        line_left, line_right = st.columns(2)
+
+        with line_left:
+            fig_w = go.Figure()
+            for name, rr, wr, base in zip(
+                picked["System"],
+                picked["RR"],
+                picked["Win rate (%)"],
+                picked["Expectancy (R)"],
+                strict=True,
+            ):
+                curve_w = expectancy_vs_win_rate(rr)
+                fig_w.add_trace(
+                    go.Scatter(
+                        x=curve_w["win_rate"] * 100,
+                        y=curve_w["expectancy"],
+                        mode="lines",
+                        name=str(name),
+                        legendgroup=str(name),
+                        line=dict(width=2.5, color=abs_colors[name]),
+                        hovertemplate=f"{name}<br>W %{{x:.1f}}% → %{{y:+.3f}}R"
+                        "<extra></extra>",
+                    )
+                )
+                fig_w.add_trace(
+                    go.Scatter(
+                        x=[wr],
+                        y=[base],
+                        mode="markers",
+                        marker=dict(
+                            size=11,
+                            color=abs_colors[name],
+                            line=dict(width=1.5, color="white"),
+                        ),
+                        showlegend=False,
+                        hovertemplate=f"{name} today<br>%{{x:.1f}}% → %{{y:+.3f}}R"
+                        "<extra></extra>",
+                    )
+                )
+            fig_w.add_hline(y=0, line_width=2, line_color=SYSTEM_COLOR)
+            fig_w.update_layout(
+                title=dict(text="Expectancy vs win rate", font=dict(size=16)),
+                height=420,
+                margin=dict(t=80, r=30, b=50, l=60),
+                legend=dict(
+                    orientation="h", yanchor="bottom", y=1.0, xanchor="left", x=0
+                ),
+            )
+            fig_w.update_xaxes(
+                title="Win rate (%)",
+                ticksuffix="%",
+                showgrid=True,
+                dtick=10,
+                gridcolor="rgba(128,128,128,0.25)",
+                griddash="dot",
+            )
+            fig_w.update_yaxes(
+                title="Expectancy (R per trade)",
+                range=[-0.5, 1.0],
+                dtick=0.25,
+                gridcolor="rgba(128,128,128,0.25)",
+                griddash="dot",
+                zeroline=False,
+            )
+            st.plotly_chart(fig_w, width="stretch")
+
+        with line_right:
+            fig_r = go.Figure()
+            for name, rr, wr, base in zip(
+                picked["System"],
+                picked["RR"],
+                picked["Win rate (%)"],
+                picked["Expectancy (R)"],
+                strict=True,
+            ):
+                curve_r = expectancy_vs_rr(wr / 100, rr_min=0.0, rr_max=RR_MAX)
+                fig_r.add_trace(
+                    go.Scatter(
+                        x=curve_r["rr"],
+                        y=curve_r["expectancy"],
+                        mode="lines",
+                        name=str(name),
+                        legendgroup=str(name),
+                        line=dict(width=2.5, color=abs_colors[name]),
+                        hovertemplate=f"{name}<br>RR %{{x:.2f}} → %{{y:+.3f}}R"
+                        "<extra></extra>",
+                    )
+                )
+                fig_r.add_trace(
+                    go.Scatter(
+                        x=[rr],
+                        y=[base],
+                        mode="markers",
+                        marker=dict(
+                            size=11,
+                            color=abs_colors[name],
+                            line=dict(width=1.5, color="white"),
+                        ),
+                        showlegend=False,
+                        hovertemplate=f"{name} today<br>RR %{{x:.2f}} → %{{y:+.3f}}R"
+                        "<extra></extra>",
+                    )
+                )
+            fig_r.add_hline(y=0, line_width=2, line_color=SYSTEM_COLOR)
+            fig_r.update_layout(
+                title=dict(text="Expectancy vs reward-to-risk", font=dict(size=16)),
+                height=420,
+                margin=dict(t=80, r=30, b=50, l=60),
+                legend=dict(
+                    orientation="h", yanchor="bottom", y=1.0, xanchor="left", x=0
+                ),
+            )
+            fig_r.update_xaxes(
+                title="Reward-to-risk (R)",
+                showgrid=True,
+                dtick=1,
+                gridcolor="rgba(128,128,128,0.25)",
+                griddash="dot",
+            )
+            fig_r.update_yaxes(
+                title="Expectancy (R per trade)",
+                range=[-0.5, 1.0],
+                dtick=0.25,
+                gridcolor="rgba(128,128,128,0.25)",
+                griddash="dot",
+                zeroline=False,
+            )
+            st.plotly_chart(fig_r, width="stretch")
+
+        st.caption(
+            "Each line varies one parameter while the other stays at that system's "
+            "value; the dot is where the system sits today. **The slope is the "
+            "sensitivity** — steeper means a given error costs more — and the "
+            "crossing of the red line is the break-even point."
+        )
 
 
 curve = breakeven_curve(RR_MIN, RR_MAX)
