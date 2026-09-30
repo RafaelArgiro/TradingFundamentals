@@ -52,8 +52,8 @@ LINE_Y_RANGE = (-0.5, 1.0)
 DEFAULT_SYSTEMS = pd.DataFrame(
     {
         "System": ["A", "B", "C", "D"],
-        "RR": [0.8, 2.0, 3.0, 5.0],
-        "Win rate (%)": [70.0, 45.0, 35.0, 22.0],
+        "RR": [0.88, 2.0, 3.0, 5.0],
+        "Win rate (%)": [70.0, 44.0, 33.0, 22.0],
     }
 )
 
@@ -236,7 +236,7 @@ with input_col:
         column_config={
             "System": st.column_config.TextColumn("System", width="small"),
             "RR": st.column_config.NumberColumn(
-                "RR", min_value=0.1, max_value=RR_MAX, step=0.1, format="%.1f"
+                "RR", min_value=0.01, max_value=RR_MAX, step=0.01, format="%.2f"
             ),
             "Win rate (%)": st.column_config.NumberColumn(
                 "Win rate (%)", min_value=0.0, max_value=100.0, step=1.0, format="%.1f"
