@@ -10,6 +10,13 @@ import streamlit as st
 from plotly.subplots import make_subplots
 
 from tfcore.expectancy import expectancy
+from tfcore.measurement import (
+    edge_bound_curve,
+    expectancy_standard_error,
+    trades_for_win_rate_margin,
+    trades_to_prove_edge,
+    win_rate_standard_error,
+)
 from tfcore.simulation import (
     equity_percentiles,
     expected_longest_losing_streak,
@@ -588,9 +595,235 @@ st.divider()
 
 st.subheader("Measuring win rate")
 
-st.info(
-    "Next up: how many trades before a measured win rate is trustworthy, and "
-    "what that implies for low win rate systems."
+st.markdown(
+    """
+Everything so far assumed the win rate is *known*. It never is — it is measured
+from a finite run of trades, and that measurement carries an error. The question
+this section answers is: **how many trades before the number means anything?**
+"""
+)
+
+st.latex(
+    r"\mathrm{SE}(\hat{W}) = \sqrt{\frac{W(1-W)}{n}}"
+    r"\qquad\quad"
+    r"n_{\text{prove}} = \frac{z^{2}\,(R+1)^{2}\,W(1-W)}{E^{2}}"
+)
+
+with st.expander("Derivation"):
+    st.markdown(
+        "Each trade is a **Bernoulli trial**: it wins with probability $W$ and "
+        "loses otherwise. Over $n$ trades the number of winners $k$ follows a "
+        "binomial distribution:"
+    )
+    st.latex(r"k \sim \mathrm{Binomial}(n, W) \qquad \mathrm{Var}(k) = n\,W(1-W)")
+
+    st.markdown(
+        "The measured win rate is $\\hat{W} = k/n$. Dividing a random variable "
+        "by $n$ divides its variance by $n^{2}$:"
+    )
+    st.latex(
+        r"\mathrm{Var}(\hat{W}) = \frac{n W (1-W)}{n^{2}} = \frac{W(1-W)}{n}"
+        r"\qquad\Rightarrow\qquad \mathrm{SE}(\hat{W}) = \sqrt{\frac{W(1-W)}{n}}"
+    )
+
+    st.markdown(
+        "Note the $\\sqrt{n}$: to **halve** the error you need **four times** "
+        "the trades. Precision is expensive."
+    )
+
+    st.markdown(
+        "For a confidence interval of $\\pm e$, set $z\\,\\mathrm{SE} = e$ and "
+        "solve for $n$:"
+    )
+    st.latex(r"n = \frac{z^{2}\,W(1-W)}{e^{2}}")
+
+    st.markdown(
+        "That is the error on the *win rate*. What we actually care about is the "
+        "error on the **edge**. Since $E = W(R+1) - 1$ is linear in $W$, the "
+        "error passes straight through, multiplied by the slope:"
+    )
+    st.latex(r"\mathrm{SE}(E) = (R+1)\,\mathrm{SE}(\hat{W})")
+
+    st.markdown(
+        "The edge is only believable once its lower confidence bound clears "
+        "zero, so require $E - z\\,\\mathrm{SE}(E) > 0$:"
+    )
+    st.latex(
+        r"E > z\,(R+1)\sqrt{\frac{W(1-W)}{n}}"
+        r"\qquad\Rightarrow\qquad"
+        r"n > \frac{z^{2}(R+1)^{2}W(1-W)}{E^{2}}"
+    )
+
+    st.markdown(
+        """
+**Two caveats.**
+
+1. These formulas use the *true* $W$, which you do not have. In practice you
+   substitute the measured $\\hat{W}$, which makes the answer itself uncertain.
+2. They assume $R$ is known exactly. It is not — it is estimated from the
+   winners only, and a low win rate system has very few of those. So every
+   number below is an **optimistic floor**; reality needs more trades.
+
+The normal approximation also requires roughly $nW \\ge 10$ and
+$n(1-W) \\ge 10$; below that the binomial is too skewed for these intervals.
+"""
+    )
+
+conf_col, margin_col = st.columns([1, 1], vertical_alignment="bottom")
+confidence = conf_col.select_slider(
+    "Confidence level (%)", options=[80, 90, 95, 99], value=95
+)
+margin_pp = margin_col.number_input(
+    "Win rate precision (± percentage points)",
+    min_value=0.5,
+    max_value=15.0,
+    value=5.0,
+    step=0.5,
+)
+
+measurement = []
+for name, rr, wr in zip(
+    systems["System"], systems["RR"], systems["Win rate (%)"], strict=True
+):
+    win_rate = float(wr) / 100
+    measurement.append(
+        {
+            "System": name,
+            "RR": float(rr),
+            "Win rate (%)": float(wr),
+            f"Trades for ±{margin_pp:g}pp": trades_for_win_rate_margin(
+                win_rate, margin_pp / 100, confidence
+            ),
+            "Trades to prove edge": trades_to_prove_edge(
+                win_rate, float(rr), confidence
+            ),
+            "SE of W at 100 trades (pp)": win_rate_standard_error(win_rate, 100) * 100,
+            "SE of E at 100 trades (R)": expectancy_standard_error(
+                win_rate, float(rr), 100
+            ),
+        }
+    )
+
+st.dataframe(
+    measurement,
+    hide_index=True,
+    width="stretch",
+    column_config={
+        "RR": st.column_config.NumberColumn(format="%.2f"),
+        "Win rate (%)": st.column_config.NumberColumn(format="%.1f"),
+        f"Trades for ±{margin_pp:g}pp": st.column_config.NumberColumn(
+            format="%.0f",
+            help="Trades needed to measure the win rate to this precision.",
+        ),
+        "Trades to prove edge": st.column_config.NumberColumn(
+            format="%.0f",
+            help="Trades before the lower confidence bound on expectancy clears zero.",
+        ),
+        "SE of W at 100 trades (pp)": st.column_config.NumberColumn(
+            format="%.1f", help="One standard error on the win rate after 100 trades."
+        ),
+        "SE of E at 100 trades (R)": st.column_config.NumberColumn(
+            format="%.3f", help="The same error carried through to expectancy."
+        ),
+    },
+)
+
+st.markdown(
+    """
+**The comparison that matters.** Look at the two "trades" columns — they rank
+the systems in *opposite* directions.
+
+- Measuring the **win rate** to a fixed precision is *easiest* for the low win
+  rate system, because $W(1-W)$ is largest at 50% and shrinks towards either
+  extreme.
+- Proving the **edge** is *hardest* for that same system, because the
+  $(R+1)^{2}$ factor magnifies every remaining scrap of win rate error.
+
+So a high-RR system gives you a precise win rate and an unreliable edge at the
+same time. Precision on the input is not the same thing as confidence in the
+conclusion.
+"""
+)
+
+bound_colors = system_colors(systems["System"])
+max_trades = int(
+    max(
+        trades_to_prove_edge(float(wr) / 100, float(rr), confidence)
+        for rr, wr in zip(systems["RR"], systems["Win rate (%)"], strict=True)
+    )
+    * 1.6
+)
+
+bounds = go.Figure()
+for name, rr, wr in zip(
+    systems["System"], systems["RR"], systems["Win rate (%)"], strict=True
+):
+    curve = edge_bound_curve(float(wr) / 100, float(rr), max_trades, confidence)
+    needed = trades_to_prove_edge(float(wr) / 100, float(rr), confidence)
+    bounds.add_trace(
+        go.Scatter(
+            x=curve["trades"],
+            y=curve["lower"],
+            mode="lines",
+            name=str(name),
+            line=dict(width=2.5, color=bound_colors[name]),
+            hovertemplate=(
+                f"{name}<br>%{{x}} trades → worst case %{{y:+.3f}}R<extra></extra>"
+            ),
+        )
+    )
+    bounds.add_trace(
+        go.Scatter(
+            x=[needed],
+            y=[0],
+            mode="markers+text",
+            marker=dict(size=11, color=bound_colors[name], symbol="diamond"),
+            text=[f"{needed:.0f}"],
+            textposition="bottom center",
+            textfont=dict(size=12, color=bound_colors[name]),
+            showlegend=False,
+            hovertemplate=f"{name} needs %{{x:.0f}} trades<extra></extra>",
+        )
+    )
+
+bounds.add_hline(y=0, line_width=2, line_color=ZERO_LINE_COLOR)
+bounds.update_layout(
+    title=dict(
+        text=f"Worst-case edge still consistent with the data ({confidence}%)",
+        font=dict(size=16),
+    ),
+    height=460,
+    margin=dict(t=80, r=30, b=50, l=70),
+    legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="left", x=0),
+)
+bounds.update_xaxes(
+    title="Trades observed",
+    showgrid=True,
+    gridcolor=GRID_COLOR,
+    griddash="dot",
+)
+bounds.update_yaxes(
+    title="Lower bound on expectancy (R per trade)",
+    range=[-0.6, 0.45],
+    showgrid=True,
+    gridcolor=GRID_COLOR,
+    griddash="dot",
+    zeroline=False,
+)
+
+st.plotly_chart(
+    bounds,
+    width="stretch",
+    config={
+        "displaylogo": False,
+        "toImageButtonOptions": {"format": "png", "filename": "edge_confidence"},
+    },
+)
+
+st.caption(
+    "Each line is the **worst** expectancy still compatible with the evidence "
+    "after that many trades. Until a line crosses the black zero line you cannot "
+    "rule out that the system loses money. The diamonds mark the crossing point."
 )
 
 st.divider()
