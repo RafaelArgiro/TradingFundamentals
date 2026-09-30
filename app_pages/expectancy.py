@@ -399,7 +399,7 @@ with st.expander("Derivation"):
     )
     st.latex(r"W^{*} = \frac{1}{1 + R} \qquad R^{*} = \frac{1 - W}{W}")
 
-    st.markdown("A buffer is simply the distance from today's value to that point:")
+    st.markdown("A buffer is simply the distance from the break-even line to the system's nominal expectancy:")
     st.latex(
         r"\text{WR buffer} = W - W^{*} \qquad \text{RR buffer} = R - R^{*}"
     )
@@ -419,9 +419,7 @@ with st.expander("Derivation"):
     )
 
     st.markdown(
-        """
-So $E = (R+1) \\times \\text{WR buffer} = W \\times \\text{RR buffer}$.
-
+        "So $E = (R+1) \\times \\text{WR buffer} = W \\times \\text{RR buffer}$."
     )
 
 if systems.empty:
@@ -474,6 +472,80 @@ else:
 st.divider()
 
 st.subheader("Elasticity")
+
+st.markdown(
+    """
+Robustness measured distance in fixed units; elasticity measures it in
+**percentages**. Each parameter ($W$ and $R$) is varied by a chosen percentage of its own
+value, and the bars show where expectancy lands — so systems of very different
+size can be compared on the same footing.
+"""
+)
+
+st.markdown(
+    """
+- **Elasticity $\\varepsilon$** — percent change in expectancy per 1% change in
+  a parameter. Higher means more fragile.
+- **Bar length** — how far expectancy moves when the parameter is varied down
+  and up by the chosen percentage. The larger the bar, the more sensitive the system is to changes in that parameter.
+- **In-bar label** — Absolute value of parameter change corresponding to the chosen variation percentage.
+- **Tick** — Expectancy at system's nominal value.
+- **Red line** — the break-even line ($E = 0$).
+"""
+)
+
+with st.expander("Derivation"):
+    st.markdown(
+        "Elasticity is the ratio of two relative changes, which cancels the "
+        "units and makes the two parameters comparable:"
+    )
+    st.latex(
+        r"\varepsilon_x = \frac{\Delta E / E}{\Delta x / x}"
+        r" = \frac{\partial E}{\partial x} \cdot \frac{x}{E}"
+    )
+
+    st.markdown(
+        "Because $E = W(R+1) - 1$ is linear in each parameter separately, the "
+        "two derivatives are constants:"
+    )
+    st.latex(
+        r"\frac{\partial E}{\partial W} = R + 1 \qquad \frac{\partial E}{\partial R} = W"
+    )
+
+    st.markdown("Substituting, and using $W(R+1) = E + 1$ to simplify the first:")
+    st.latex(
+        r"\varepsilon_W = \frac{W (R + 1)}{E} = \frac{E + 1}{E}"
+        r" \qquad \varepsilon_R = \frac{W R}{E}"
+    )
+
+    st.markdown(
+        "The relative drop a system can absorb before breaking even is exactly "
+        "the inverse:"
+    )
+    st.latex(
+        r"\frac{W - W^{*}}{W} = 1 - \frac{1}{W(1+R)} = \frac{E}{E + 1}"
+        r" = \frac{1}{\varepsilon_W}"
+    )
+
+    st.markdown(
+        """
+Three consequences:
+
+- **Win rate is always the weaker link.** The ratio
+  $\\varepsilon_W / \\varepsilon_R = (R+1)/R = 1 + 1/R$ is greater than 1 for
+  every system — by 2× at 1R, but only 1.1× at 10R.
+- **Relative fragility depends only on expectancy.** Since
+  $\\varepsilon_W = (E+1)/E$, two systems with the same edge are equally fragile
+  in percentage terms, irrespective of their RR.
+- **Thin edges are explosively fragile.** $\\varepsilon_W \\to \\infty$ as
+  $E \\to 0$: at $E = 0.35$ a 1% win-rate error costs 3.9% of the edge, at
+  $E = 0.01$ it costs 101%.
+
+One caveat: because $E$ is linear in each parameter ($W$ and $R$), these results are **exact**
+for any single-parameter deviation, not just small ones. They are only valid for single-parameter deviations and become an
+approximation if both parameters move at once.
+"""
+    )
 
 if systems.empty:
     st.info("Enter at least one system to see its sensitivity.")
@@ -548,7 +620,7 @@ else:
 
         st.caption(
             "Each bar shows where expectancy lands if that one parameter is off by "
-            "the chosen amount. The tick marks the unchanged value, and the red "
+            "the chosen amount. The tick marks the nominal value, and the red "
             "line is break-even — **a bar crossing it means that error alone can "
             "wipe out the edge.** Longer bars mean greater sensitivity."
         )
@@ -715,7 +787,7 @@ else:
                             line=dict(width=1.5, color="white"),
                         ),
                         showlegend=False,
-                        hovertemplate=f"{name} today<br>%{{x:.2f}} → %{{y:+.3f}}R"
+                        hovertemplate=f"{name} nominal<br>%{{x:.2f}} → %{{y:+.3f}}R"
                         "<extra></extra>",
                     ),
                     row=1,
@@ -762,7 +834,7 @@ else:
 
         st.caption(
             "Each line varies one parameter while the other stays at that system's "
-            "value; the dot is where the system sits today. **The slope is the "
+            "value; the dot is the nominal value as entered. **The slope is the "
             "sensitivity** — steeper means a given error costs more — and the "
             "crossing of the red line is the break-even point."
         )
