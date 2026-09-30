@@ -196,8 +196,8 @@ toggles, lo_col, hi_col = st.columns([2, 1, 1], vertical_alignment="bottom")
 with toggles:
     show_shading = st.toggle("Profit / loss shading", value=True)
     show_sweet_spot = st.toggle("Sweet spot", value=False)
-    show_systems = st.toggle("Trading systems", value=False)
-    show_isobars = st.toggle("Iso-expectancy lines", value=False)
+    show_systems = st.toggle("Trading systems", value=True)
+    show_isobars = st.toggle("Iso-expectancy lines", value=True)
 
 rr_lo = lo_col.number_input(
     "Min RR",
