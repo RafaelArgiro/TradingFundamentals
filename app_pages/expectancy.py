@@ -47,6 +47,7 @@ ISO_LEVELS = [round(0.1 * i, 1) for i in range(1, 11)]
 # Each label is placed where its curve crosses this win rate, which spreads
 # them diagonally instead of bunching at one edge.
 ISO_LABEL_WIN_RATES = [0.75 - 0.061 * i for i in range(len(ISO_LEVELS))]
+LINE_Y_RANGE = (-0.5, 1.0)
 
 DEFAULT_SYSTEMS = pd.DataFrame(
     {
@@ -489,13 +490,34 @@ else:
             subplot_titles=("Expectancy vs win rate", "Expectancy vs reward-to-risk"),
         )
 
-        for name, rr, wr, base in zip(
-            picked["System"],
-            picked["RR"],
-            picked["Win rate (%)"],
-            picked["Expectancy (R)"],
-            strict=True,
+        def slope_label(curve, x_column, text, color, frac):
+            """Annotate a line where it is inside the visible y range."""
+            visible = curve[curve["expectancy"].between(*LINE_Y_RANGE)]
+            if visible.empty:
+                return None
+            index = min(int(len(visible) * frac), len(visible) - 1)
+            point = visible.iloc[index]
+            return dict(
+                x=point[x_column],
+                y=point["expectancy"],
+                text=text,
+                showarrow=False,
+                yshift=14,
+                font=dict(size=11, color=color),
+                bgcolor="rgba(255,255,255,0.75)",
+                borderpad=2,
+            )
+
+        for i, (name, rr, wr, base) in enumerate(
+            zip(
+                picked["System"],
+                picked["RR"],
+                picked["Win rate (%)"],
+                picked["Expectancy (R)"],
+                strict=True,
+            )
         ):
+            spread = 0.8 - 0.15 * i
             curve_w = expectancy_vs_win_rate(rr)
             fig_lines.add_trace(
                 go.Scatter(
@@ -511,6 +533,17 @@ else:
                 row=1,
                 col=1,
             )
+            curve_w = curve_w.assign(win_rate_pct=curve_w["win_rate"] * 100)
+            note = slope_label(
+                curve_w,
+                "win_rate_pct",
+                f"{(rr + 1) / 100:.3f} R/pp",
+                abs_colors[name],
+                spread,
+            )
+            if note:
+                fig_lines.add_annotation(**note, row=1, col=1)
+
             curve_r = expectancy_vs_rr(wr / 100, rr_min=0.0, rr_max=RR_MAX)
             fig_lines.add_trace(
                 go.Scatter(
@@ -527,6 +560,12 @@ else:
                 row=1,
                 col=2,
             )
+            note = slope_label(
+                curve_r, "rr", f"{wr / 100:.2f} R/R", abs_colors[name], spread
+            )
+            if note:
+                fig_lines.add_annotation(**note, row=1, col=2)
+
             for col, x_now in ((1, wr), (2, rr)):
                 fig_lines.add_trace(
                     go.Scatter(
@@ -574,7 +613,7 @@ else:
         for col in (1, 2):
             fig_lines.update_yaxes(
                 title="Expectancy (R per trade)",
-                range=[-0.5, 1.0],
+                range=list(LINE_Y_RANGE),
                 dtick=0.25,
                 gridcolor="rgba(128,128,128,0.25)",
                 griddash="dot",
