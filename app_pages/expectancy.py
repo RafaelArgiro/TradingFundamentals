@@ -630,6 +630,71 @@ st.divider()
 
 st.subheader("Absolute sensitivity")
 
+st.markdown(
+    """
+The mirror image of elasticity. There every system was knocked off by the same
+*percentage* of its own value; here every system is knocked off by the same
+*fixed amount* — the same percentage-point shift in $W$, the same shift in $R$.
+That makes the bars directly comparable in R, and answers a different question:
+not "who is most fragile relative to itself", but "who suffers most from the
+same real-world mistake".
+"""
+)
+
+st.markdown(
+    """
+- **Bar length** — how far expectancy moves when the parameter is shifted down
+  and up by the chosen amount. Because the shift is identical for every system,
+  a longer bar simply means that system converts the same error into a bigger
+  loss of edge.
+- **In-bar label** — what that fixed shift represents as a percentage of this
+  system's own value, so you can see how severe it really is for each.
+- **Tick** — the nominal value: expectancy at the parameters as entered, with no
+  shift applied.
+- **Red line** — the break-even line ($E = 0$).
+- **Line plots** — expectancy across the full range of one parameter, with the
+  other held at that system's value. The **slope** is the sensitivity and the
+  crossing of the red line is the break-even point.
+"""
+)
+
+with st.expander("Derivation"):
+    st.markdown(
+        "A fixed shift multiplied by the relevant derivative gives the change in "
+        "expectancy directly. The derivatives are constants, so no approximation "
+        "is involved:"
+    )
+    st.latex(
+        r"\frac{\partial E}{\partial W} = R + 1 \qquad \frac{\partial E}{\partial R} = W"
+    )
+
+    st.markdown(
+        "Shifting a parameter down and up by $\\delta$ therefore produces bars of "
+        "width:"
+    )
+    st.latex(
+        r"\text{width}_W = 2\,\delta\,(R + 1) \qquad \text{width}_R = 2\,\delta\,W"
+    )
+
+    st.markdown(
+        """
+These are also the slopes drawn on the line plots, which is why both are
+straight lines.
+
+The ranking is the striking part — and it is the **opposite** of what the
+elasticity view suggests:
+
+- The win-rate panel orders systems purely by $R$. A high-RR system multiplies
+  every percentage point of win-rate error by a larger factor, so it loses the
+  most edge from the same slip.
+- The RR panel orders systems purely by $W$. A high-win-rate system takes its
+  payoff more often, so a shrinking average win costs it more.
+
+Neither ranking depends on the system's expectancy at all — only on the *other*
+parameter.
+"""
+    )
+
 if systems.empty:
     st.info("Enter at least one system to see its sensitivity.")
 else:
