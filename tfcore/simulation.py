@@ -1,5 +1,7 @@
 """Monte Carlo style simulation of trade sequences from a system's statistics."""
 
+from collections.abc import Iterable
+
 import numpy as np
 import pandas as pd
 
@@ -71,3 +73,30 @@ def max_drawdown(equity: pd.Series | np.ndarray) -> float:
         return 0.0
     running_peak = np.maximum.accumulate(equity)
     return float(np.max(running_peak - equity))
+
+
+def equity_percentiles(
+    curves: pd.DataFrame, percentiles: Iterable[float] = (10, 50, 90)
+) -> pd.DataFrame:
+    """Collapse many equity curves into one band per percentile.
+
+    Takes the wide table from `simulate_many_curves` and returns a column named
+    `p10`, `p50`, ... for each requested percentile, indexed by trade number.
+    """
+    levels = list(percentiles)
+    if not levels:
+        raise ValueError("at least one percentile is required")
+    if any(not 0 <= p <= 100 for p in levels):
+        raise ValueError("percentiles must lie between 0 and 100")
+
+    values = np.percentile(curves.to_numpy(), levels, axis=1)
+    return pd.DataFrame(
+        values.T,
+        index=curves.index,
+        columns=[f"p{p:g}" for p in levels],
+    )
+
+
+def final_outcomes(curves: pd.DataFrame) -> pd.Series:
+    """The closing equity of every simulated run."""
+    return curves.iloc[-1]
