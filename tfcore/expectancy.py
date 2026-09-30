@@ -111,6 +111,34 @@ def breakeven_points(rr_values: Iterable[float]) -> pd.DataFrame:
     return pd.DataFrame({"rr": rr, "win_rate": 1.0 / (1.0 + rr)})
 
 
+def iso_expectancy_curve(
+    level: float, rr_min: float = 0.2, rr_max: float = 10.0, n_points: int = 300
+) -> pd.DataFrame:
+    """Win rate needed to earn exactly `level` R per trade, across a range of RR.
+
+    The break-even curve is the special case `level = 0`. Points requiring an
+    impossible win rate above 100% are dropped.
+
+    Columns: `rr`, `win_rate`.
+    """
+    if level < 0:
+        raise ValueError(f"level must be non-negative, got {level}")
+    if not 0 < rr_min < rr_max:
+        raise ValueError("rr bounds must satisfy 0 < min < max")
+
+    rr = np.linspace(rr_min, rr_max, n_points)
+    win_rate = (1.0 + level) / (1.0 + rr)
+    curve = pd.DataFrame({"rr": rr, "win_rate": win_rate})
+    return curve[curve["win_rate"] <= 1.0].reset_index(drop=True)
+
+
+def rr_for_iso_win_rate(level: float, win_rate: float) -> float:
+    """The RR at which `level` R of expectancy needs exactly `win_rate`."""
+    if not 0 < win_rate <= 1:
+        raise ValueError(f"win_rate must be in (0, 1], got {win_rate}")
+    return (1.0 + level) / win_rate - 1.0
+
+
 def expectancy_vs_win_rate(
     rr: float,
     win_rate_min: float = 0.0,

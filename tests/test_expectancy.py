@@ -10,8 +10,10 @@ from tfcore.expectancy import (
     expectancy_from_rr,
     expectancy_vs_rr,
     expectancy_vs_win_rate,
+    iso_expectancy_curve,
     required_win_rate,
     reward_to_risk,
+    rr_for_iso_win_rate,
 )
 
 
@@ -159,3 +161,41 @@ def test_expectancy_curves_agree_at_the_shared_point():
     assert by_win_rate["expectancy"].iloc[-1] == pytest.approx(
         expectancy_from_rr(1.0, 2.0)
     )
+
+
+def test_iso_curve_delivers_its_level_everywhere():
+    for level in [0.1, 0.5, 1.0]:
+        iso = iso_expectancy_curve(level, rr_min=0.2, rr_max=10.0, n_points=40)
+        for rr, wr in zip(iso["rr"], iso["win_rate"], strict=True):
+            assert expectancy_from_rr(wr, rr) == pytest.approx(level)
+
+
+def test_iso_curve_at_level_zero_is_the_breakeven_curve():
+    iso = iso_expectancy_curve(0.0, rr_min=0.5, rr_max=10.0, n_points=20)
+    for rr, wr in zip(iso["rr"], iso["win_rate"], strict=True):
+        assert wr == pytest.approx(required_win_rate(rr))
+
+
+def test_iso_curve_drops_impossible_win_rates():
+    iso = iso_expectancy_curve(1.0, rr_min=0.2, rr_max=10.0)
+    assert (iso["win_rate"] <= 1.0).all()
+    # A 1R edge is unreachable below RR = 1 even at a 100% win rate.
+    assert iso["rr"].min() >= 1.0
+
+
+def test_higher_levels_need_higher_win_rates():
+    low = iso_expectancy_curve(0.2, rr_min=2.0, rr_max=10.0, n_points=20)
+    high = iso_expectancy_curve(0.8, rr_min=2.0, rr_max=10.0, n_points=20)
+    assert (high["win_rate"].to_numpy() > low["win_rate"].to_numpy()).all()
+
+
+def test_rr_for_iso_win_rate_inverts_the_curve():
+    for level in [0.1, 0.5, 1.0]:
+        for wr in [0.3, 0.5, 0.8]:
+            rr = rr_for_iso_win_rate(level, wr)
+            assert expectancy_from_rr(wr, rr) == pytest.approx(level)
+
+
+def test_iso_curve_rejects_negative_level():
+    with pytest.raises(ValueError, match="level"):
+        iso_expectancy_curve(-0.1)

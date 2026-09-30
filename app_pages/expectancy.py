@@ -14,6 +14,8 @@ from tfcore.expectancy import (
     expectancy_from_rr,
     expectancy_vs_rr,
     expectancy_vs_win_rate,
+    iso_expectancy_curve,
+    rr_for_iso_win_rate,
 )
 from tfcore.robustness import (
     absolute_sensitivity_range,
@@ -40,6 +42,11 @@ SWEET_SPOT_COLOR = "#1b5e20"
 SYSTEM_COLOR = "#d62728"
 POSITIVE_COLOR = "#2e7d32"
 SYSTEM_PALETTE = ["#4c78a8", "#f58518", "#54a24b", "#b279a2"]
+ISO_COLOR = "rgba(125, 125, 125, 0.65)"
+ISO_LEVELS = [round(0.1 * i, 1) for i in range(1, 11)]
+# Each label is placed where its curve crosses this win rate, which spreads
+# them diagonally instead of bunching at one edge.
+ISO_LABEL_WIN_RATES = [0.75 - 0.061 * i for i in range(len(ISO_LEVELS))]
 
 DEFAULT_SYSTEMS = pd.DataFrame(
     {
@@ -189,6 +196,7 @@ with toggles:
     show_shading = st.toggle("Profit / loss shading", value=True)
     show_sweet_spot = st.toggle("Sweet spot", value=False)
     show_systems = st.toggle("Trading systems", value=False)
+    show_isobars = st.toggle("Iso-expectancy lines", value=False)
 
 rr_lo = lo_col.number_input(
     "Min RR",
@@ -614,6 +622,34 @@ if show_shading:
             hoverinfo="skip",
         )
     )
+
+if show_isobars:
+    for level, label_wr in zip(ISO_LEVELS, ISO_LABEL_WIN_RATES, strict=True):
+        iso = iso_expectancy_curve(level, rr_min=RR_MIN, rr_max=X_HI)
+        if iso.empty:
+            continue
+        fig.add_trace(
+            go.Scatter(
+                x=iso["rr"],
+                y=iso["win_rate"] * 100,
+                mode="lines",
+                line=dict(width=1, color=ISO_COLOR, dash="dot"),
+                hovertemplate=(
+                    f"E = {level:.1f}R<br>RR %{{x:.2f}} → %{{y:.1f}}%<extra></extra>"
+                ),
+            )
+        )
+        label_rr = rr_for_iso_win_rate(level, label_wr)
+        if RR_MIN <= label_rr <= X_HI:
+            fig.add_annotation(
+                x=label_rr,
+                y=label_wr * 100,
+                text=f"{level:.1f}R",
+                showarrow=False,
+                font=dict(size=11, color=ISO_COLOR),
+                bgcolor="rgba(255,255,255,0.75)",
+                borderpad=2,
+            )
 
 fig.add_trace(
     go.Scatter(
