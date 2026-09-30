@@ -189,7 +189,57 @@ def include_picker(names, key_prefix: str) -> list:
             for i, name in enumerate(names)
             if st.checkbox(str(name), value=True, key=f"{key_prefix}_{i}")
         ]
-st.latex(r"\text{Break-even win rate} = \frac{1}{1 + RR}")
+st.subheader("Introduction")
+
+st.markdown(
+    """
+**Expectancy** is the average result of a single trade, repeated many times. It
+is the one number that decides whether a system makes or loses money in the long
+run — everything else is detail.
+
+Results are measured in **R**, where 1R is the amount risked on one trade.
+Throughout this page the average loss is fixed at exactly **1R**, so a stop-out
+costs 1R and the reward-to-risk ratio **RR** is simply how many R a typical
+winner returns.
+"""
+)
+
+st.latex(
+    r"E \;=\; \underbrace{W \cdot R}_{\text{what you win}} \;-\;"
+    r"\underbrace{(1 - W) \cdot 1}_{\text{what you lose}}"
+    r"\;=\; W\,(R + 1) - 1"
+)
+
+st.markdown(
+    """
+with $W$ the win rate and $R$ the reward-to-risk ratio. Setting $E = 0$ and
+solving for $W$ gives the **break-even win rate**:
+"""
+)
+
+st.latex(r"W^{*} = \frac{1}{1 + R}")
+
+
+st.markdown(
+    """
+**What is on this page**
+
+| Section | Question it answers |
+| --- | --- |
+| **Break-even line** | What win rate does a given RR need just to break even? |
+| **Trading systems** | Where do my own systems sit, and what is each one worth per trade? |
+| **Robustness** | How much room does each system have before its edge disappears? |
+| **Elasticity** | If a parameter is off by a given *percentage*, what happens to expectancy? |
+| **Absolute sensitivity** | If a parameter is off by a fixed *amount*, what happens — and how steep is the relationship? |
+| **Conclusion** | What should I take away from all of it? |
+"""
+)
+
+st.divider()
+
+st.subheader("Break-even line")
+
+st.latex(r"\text{Break-even win rate} = \frac{1}{1 + R}")
 
 toggles, lo_col, hi_col = st.columns([2, 1, 1], vertical_alignment="bottom")
 
@@ -222,6 +272,8 @@ if show_sweet_spot and rr_hi <= rr_lo:
 
 # Rendered at the end, once the trading systems below are known.
 chart_slot = st.container()
+
+st.divider()
 
 st.subheader("Trading systems")
 
@@ -289,6 +341,8 @@ with bar_col:
         bar.update_xaxes(title="", tickfont=dict(size=12))
         st.plotly_chart(bar, width="stretch")
 
+st.divider()
+
 st.subheader("Robustness")
 
 if systems.empty:
@@ -337,6 +391,8 @@ else:
             ),
         },
     )
+
+st.divider()
 
 st.subheader("Elasticity")
 
@@ -417,6 +473,8 @@ else:
             "line is break-even — **a bar crossing it means that error alone can "
             "wipe out the edge.** Longer bars mean greater sensitivity."
         )
+
+st.divider()
 
 st.subheader("Absolute sensitivity")
 
@@ -774,3 +832,43 @@ fig.update_yaxes(
 
 with chart_slot:
     st.plotly_chart(fig, width="stretch")
+
+st.divider()
+
+st.subheader("Conclusion")
+
+st.markdown(
+    "Expectancy tells you *whether* a system works. The sections above tell you "
+    "*how much you can trust that answer* — and the two are far less related "
+    "than they look."
+)
+
+with st.expander("Things worth keeping in mind"):
+    st.markdown(
+        """
+- **Expectancy is per trade, not per year.** A system with half the expectancy
+  but three times the trade frequency earns more. Frequency is not modelled here.
+- **Equal expectancy does not mean equal quality.** Two systems can share the
+  same $E$ and behave completely differently under a small estimation error.
+  That is what the robustness sections are for.
+- **Win rate is always the more fragile input.** For any profitable system the
+  ratio of the two elasticities is $1 + 1/R$, which is greater than 1 — so a
+  given *percentage* error in $W$ always costs more than the same error in $R$.
+  The gap is widest at low RR.
+- **A thin edge is not slightly fragile, it is extremely fragile.** Relative
+  sensitivity to win rate is $(E+1)/E$, which grows without bound as $E$
+  approaches zero. Demand a buffer, not merely a positive number.
+- **Low win rates are expensive to verify.** Proving a 22% / 5R system is
+  profitable takes roughly eight times as many trades as a 70% / 0.88R system
+  with the same expectancy.
+- **Low win rates are also expensive to sit through.** Over 200 trades a 22%
+  system expects a losing streak of about 21 trades, against about 4 for a 70%
+  system — a far harder thing to hold through.
+- **Costs are neutral.** A fixed cost of $c$ R per trade reduces every system's
+  expectancy by exactly $c$, regardless of its RR, since
+  $W(R - c) - (1 - W)(1 + c) = E - c$.
+- **Defend the win rate.** It is the binding constraint for every system, and it
+  is the input that degrades in live trading through slippage, hesitation and
+  missed entries. RR is set by your exit rules and is far more controllable.
+"""
+    )
