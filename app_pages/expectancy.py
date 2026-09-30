@@ -189,6 +189,16 @@ def include_picker(names, key_prefix: str) -> list:
             for i, name in enumerate(names)
             if st.checkbox(str(name), value=True, key=f"{key_prefix}_{i}")
         ]
+
+
+def export_config(filename: str) -> dict:
+    """Name the file the chart toolbar's download button produces."""
+    return {
+        "displaylogo": False,
+        "toImageButtonOptions": {"format": "png", "filename": filename},
+    }
+
+
 st.subheader("Introduction")
 
 st.markdown(
@@ -369,7 +379,9 @@ with bar_col:
             zeroline=False,
         )
         bar.update_xaxes(title="", tickfont=dict(size=12))
-        st.plotly_chart(bar, width="stretch")
+        st.plotly_chart(
+            bar, width="stretch", config=export_config("expectancy_by_system")
+        )
 
 st.divider()
 
@@ -622,6 +634,7 @@ else:
                 **shared,
             ),
             width="stretch",
+            config=export_config("elasticity_tornado"),
         )
 
         st.caption(
@@ -753,6 +766,7 @@ else:
                 **abs_shared,
             ),
             width="stretch",
+            config=export_config("absolute_sensitivity_tornado"),
         )
 
         st.caption(
@@ -901,7 +915,11 @@ else:
                 row=1,
                 col=col,
             )
-        st.plotly_chart(fig_lines, width="stretch")
+        st.plotly_chart(
+            fig_lines,
+            width="stretch",
+            config=export_config("expectancy_vs_parameters"),
+        )
 
         st.caption(
             "Each line varies one parameter while the other stays at that system's "
@@ -1053,7 +1071,9 @@ fig.update_yaxes(
 )
 
 with chart_slot:
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(
+        fig, width="stretch", config=export_config("breakeven_win_rate")
+    )
 
 st.divider()
 
