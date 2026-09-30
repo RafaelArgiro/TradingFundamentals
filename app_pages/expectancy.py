@@ -218,14 +218,16 @@ st.markdown(
     """
 **What is on this page**
 
-| Section | Question it answers |
-| --- | --- |
-| **Break-even line** | What win rate does a given RR need just to break even? |
-| **Trading systems** | Where do my own systems sit, and what is each one worth per trade? |
-| **Robustness** | How much room does each system have before its edge disappears? |
-| **Elasticity** | If a parameter is off by a given *percentage*, what happens to expectancy? |
-| **Absolute sensitivity** | If a parameter is off by a fixed *amount*, what happens — and how steep is the relationship? |
-| **Conclusion** | What should I take away from all of it? |
+- **Break-even line** — what win rate does a given RR need just to break even?
+- **Trading systems** — where do my own systems sit, and what is each one worth
+  per trade?
+- **Robustness** — how much room does each system have before its edge
+  disappears?
+- **Elasticity** — if a parameter is off by a given *percentage*, what happens
+  to expectancy?
+- **Absolute sensitivity** — if a parameter is off by a fixed *amount*, what
+  happens, and how steep is the relationship?
+- **Conclusion** — what should I take away from all of it?
 """
 )
 
@@ -535,9 +537,12 @@ Three consequences:
 - **Win rate is always the weaker link.** The ratio
   $\\varepsilon_W / \\varepsilon_R = (R+1)/R = 1 + 1/R$ is greater than 1 for
   every system — by 2× at 1R, but only 1.1× at 10R.
-- **Relative fragility depends only on expectancy.** Since
-  $\\varepsilon_W = (E+1)/E$, two systems with the same edge are equally fragile
-  in percentage terms, irrespective of their RR.
+- **Win-rate fragility depends only on expectancy.** $\\varepsilon_W = (E+1)/E$
+  contains no $W$ or $R$, so two systems with the same edge are equally fragile
+  to a percentage win-rate error, whatever their RR. This does **not** carry
+  over to $\\varepsilon_R = WR/E$, which still depends on the win rate:
+  substituting $WR = E + 1 - W$ gives $\\varepsilon_R = \\varepsilon_W - W/E$,
+  so a higher win rate makes a system *less* elastic to RR.
 - **Thin edges are explosively fragile.** $\\varepsilon_W \\to \\infty$ as
   $E \\to 0$: at $E = 0.35$ a 1% win-rate error costs 3.9% of the edge, at
   $E = 0.01$ it costs 101%.
@@ -1052,7 +1057,7 @@ with chart_slot:
 
 st.divider()
 
-st.subheader("Conclusion")
+st.subheader("Conclusions")
 
 st.markdown(
     "Expectancy tells you *whether* a system works. The sections above tell you "
@@ -1060,9 +1065,8 @@ st.markdown(
     "than they look."
 )
 
-with st.expander("Things worth keeping in mind"):
-    st.markdown(
-        """
+st.markdown(
+    """
 - **Expectancy is per trade, not per year.** A system with half the expectancy
   but three times the trade frequency earns more. Frequency is not modelled here.
 - **Equal expectancy does not mean equal quality.** Two systems can share the
@@ -1075,12 +1079,6 @@ with st.expander("Things worth keeping in mind"):
 - **A thin edge is not slightly fragile, it is extremely fragile.** Relative
   sensitivity to win rate is $(E+1)/E$, which grows without bound as $E$
   approaches zero. Demand a buffer, not merely a positive number.
-- **Low win rates are expensive to verify.** Proving a 22% / 5R system is
-  profitable takes roughly eight times as many trades as a 70% / 0.88R system
-  with the same expectancy.
-- **Low win rates are also expensive to sit through.** Over 200 trades a 22%
-  system expects a losing streak of about 21 trades, against about 4 for a 70%
-  system — a far harder thing to hold through.
 - **Costs are neutral.** A fixed cost of $c$ R per trade reduces every system's
   expectancy by exactly $c$, regardless of its RR, since
   $W(R - c) - (1 - W)(1 + c) = E - c$.
