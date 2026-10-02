@@ -27,6 +27,7 @@ from tfcore.simulation import (
     simulate_many_curves,
 )
 from viz.systems import DEFAULT_SYSTEMS, rgba, system_colors, to_inputs
+from viz.tables import show_table
 
 BAND_ALPHA = 0.13
 INNER_ALPHA = 0.22
@@ -95,15 +96,28 @@ systems["Expectancy (R)"] = [
 ]
 colors = system_colors(systems["System"])
 
+static_tables = st.toggle(
+    "Copy-friendly tables",
+    value=False,
+    help=(
+        "Renders tables as plain HTML so you can select them with the mouse and "
+        "paste them into Word or Google Docs as a real table."
+    ),
+)
+
 st.caption("All four systems carry essentially the same edge:")
-st.dataframe(
+show_table(
     systems,
-    hide_index=True,
-    width="content",
+    static=static_tables,
     column_config={
         "RR": st.column_config.NumberColumn(format="%.2f"),
         "Win rate (%)": st.column_config.NumberColumn(format="%.1f"),
         "Expectancy (R)": st.column_config.NumberColumn(format="%+.3f"),
+    },
+    formats={
+        "RR": "{:.2f}",
+        "Win rate (%)": "{:.1f}",
+        "Expectancy (R)": "{:+.3f}",
     },
 )
 
@@ -588,10 +602,9 @@ else:
             }
         )
 
-    st.dataframe(
+    show_table(
         drawdown_rows,
-        hide_index=True,
-        width="stretch",
+        static=static_tables,
         column_config={
             "Avg max DD (R)": st.column_config.NumberColumn(
                 format="%.1f", help="Mean of each run's deepest peak-to-trough fall."
@@ -617,6 +630,15 @@ else:
                 help="Longest stretch below a previous peak, averaged over runs.",
             ),
         },
+        formats={
+            "Avg max DD (R)": "{:.1f}",
+            "Median max DD (R)": "{:.1f}",
+            "Worst 5% DD (R)": "{:.1f}",
+            "Avg losing streak": "{:.1f}",
+            "Worst 5% streak": "{:.0f}",
+            "Theoretical streak": "{:.1f}",
+            "Avg trades underwater": "{:.0f}",
+        },
     )
 
     st.caption(
@@ -631,8 +653,8 @@ st.subheader("Measuring win rate")
 st.markdown(
     """
 Everything so far assumed the win rate is *known*. It never is. You measure it
-by counting winners over a finite run of trades, and that count is partly luck.
-Flip a fair coin 100 times and you will not get exactly 50 heads — you might get
+by counting winners over a finite number of trades, and that count is partly luck.
+Flip a fair coin 100 times and you will most likely not get exactly 50 heads — you might get
 44. Measure a 44% system over 100 trades and you might observe 52%, through no
 fault of the system.
 
@@ -853,10 +875,9 @@ for name, rr, wr in zip(
         }
     )
 
-st.dataframe(
+show_table(
     measurement,
-    hide_index=True,
-    width="stretch",
+    static=static_tables,
     column_config={
         "RR": st.column_config.NumberColumn(format="%.2f"),
         "Win rate (%)": st.column_config.NumberColumn(format="%.1f"),
@@ -874,6 +895,14 @@ st.dataframe(
         "SE of E at 100 trades (R)": st.column_config.NumberColumn(
             format="%.3f", help="The same error carried through to expectancy."
         ),
+    },
+    formats={
+        "RR": "{:.2f}",
+        "Win rate (%)": "{:.1f}",
+        f"Trades for ±{margin_pp:g}pp": "{:.0f}",
+        "Trades to prove edge": "{:.0f}",
+        "SE of W at 100 trades (pp)": "{:.1f}",
+        "SE of E at 100 trades (R)": "{:.3f}",
     },
 )
 

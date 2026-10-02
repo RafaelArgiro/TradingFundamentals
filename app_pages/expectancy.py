@@ -25,6 +25,7 @@ from tfcore.robustness import (
     sensitivity_range,
     win_rate_buffer,
 )
+from viz.tables import show_table
 
 RR_MIN, RR_MAX = 0.2, 10.0
 LABEL_POINTS = (0.5, *range(1, 11))
@@ -437,6 +438,15 @@ with st.expander("Derivation"):
         "So $E = (R+1) \\times \\text{WR buffer} = W \\times \\text{RR buffer}$."
     )
 
+static_tables = st.toggle(
+    "Copy-friendly table",
+    value=False,
+    help=(
+        "Renders the table as plain HTML so you can select it with the mouse and "
+        "paste it into Word or Google Docs as a real table."
+    ),
+)
+
 if systems.empty:
     st.info("Enter at least one system to see its robustness.")
 else:
@@ -459,10 +469,9 @@ else:
         }
     )
 
-    st.dataframe(
+    show_table(
         robustness,
-        hide_index=True,
-        width="stretch",
+        static=static_tables,
         column_config={
             "RR": st.column_config.NumberColumn(format="%.1f"),
             "Win rate (%)": st.column_config.NumberColumn(format="%.1f"),
@@ -481,6 +490,15 @@ else:
                 format="%+.2f",
                 help="How much R the average win can shrink before breaking even.",
             ),
+        },
+        formats={
+            "RR": "{:.1f}",
+            "Win rate (%)": "{:.1f}",
+            "Expectancy (R)": "{:+.3f}",
+            "Critical WR (%)": "{:.1f}",
+            "WR buffer (pp)": "{:+.1f}",
+            "Critical RR": "{:.2f}",
+            "RR buffer (R)": "{:+.2f}",
         },
     )
 
