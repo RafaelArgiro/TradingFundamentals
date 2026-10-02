@@ -597,61 +597,177 @@ st.subheader("Measuring win rate")
 
 st.markdown(
     """
-Everything so far assumed the win rate is *known*. It never is — it is measured
-from a finite run of trades, and that measurement carries an error. The question
-this section answers is: **how many trades before the number means anything?**
+Everything so far assumed the win rate is *known*. It never is. You measure it
+by counting winners over a finite run of trades, and that count is partly luck.
+Flip a fair coin 100 times and you will not get exactly 50 heads — you might get
+44. Measure a 44% system over 100 trades and you might observe 52%, through no
+fault of the system.
+
+So the measured win rate is an **estimate**, written $\\hat{W}$ ("W-hat") to
+distinguish it from the true value $W$ you will never actually see. The question
+this section answers is: **how many trades before that estimate is worth
+anything?**
 """
 )
 
-st.latex(
-    r"\mathrm{SE}(\hat{W}) = \sqrt{\frac{W(1-W)}{n}}"
-    r"\qquad\quad"
-    r"n_{\text{prove}} = \frac{z^{2}\,(R+1)^{2}\,W(1-W)}{E^{2}}"
+st.markdown(
+    """
+**The jargon, in plain terms**
+
+- **Standard error (SE)** — the typical distance between your measurement and
+  the truth. Not a mistake you made; just the unavoidable wobble from having
+  only a limited number of trades. An SE of 5 percentage points means a measured
+  44% could comfortably be a true 39% or 49%.
+- **Confidence interval** — the range of true values that could plausibly have
+  produced what you saw. "95% confident" means: if you repeated the whole
+  exercise many times, the interval would contain the truth 19 times out of 20.
+- **$z$** — how many standard errors wide you draw that interval. For 95% it is
+  **1.96**; for 90% it is 1.645; for 99% it is 2.576. Higher confidence means a
+  wider interval.
+- **$n$** — the number of trades you have observed.
+"""
 )
 
-with st.expander("Derivation"):
+st.latex(r"\mathrm{SE}(\hat{W}) = \sqrt{\frac{W(1-W)}{n}}")
+
+st.latex(r"n_{\text{prove}} = \frac{z^{2}\,(R+1)^{2}\,W(1-W)}{E^{2}}")
+
+st.markdown(
+    """
+The first formula says how wobbly your measured win rate is. The second says how
+many trades you need before you can honestly claim the system makes money.
+"""
+)
+
+with st.expander("Derivation, step by step"):
     st.markdown(
-        "Each trade is a **Bernoulli trial**: it wins with probability $W$ and "
-        "loses otherwise. Over $n$ trades the number of winners $k$ follows a "
-        "binomial distribution:"
+        """
+**Step 1 — one trade is a coin flip**
+
+A **Bernoulli trial** is the simplest random event there is: it has two
+outcomes, and one of them happens with a fixed probability. A coin flip is one.
+So is a trade, if you only record win or lose. The probability of a win is $W$.
+"""
+    )
+
+    st.markdown(
+        """
+**Step 2 — many trades give a binomial count**
+
+Run $n$ independent trades and count the winners. That count, call it $k$,
+follows a **binomial distribution** — the standard description of "how many
+successes in $n$ attempts". It has a known spread:
+"""
     )
     st.latex(r"k \sim \mathrm{Binomial}(n, W) \qquad \mathrm{Var}(k) = n\,W(1-W)")
 
     st.markdown(
-        "The measured win rate is $\\hat{W} = k/n$. Dividing a random variable "
-        "by $n$ divides its variance by $n^{2}$:"
+        """
+**Variance** is a measure of spread: the average squared distance from the
+mean. Its square root is the **standard deviation**, which is in the same units
+as the thing being measured and is therefore easier to interpret.
+
+Notice $W(1-W)$ is largest at $W = 0.5$ (giving 0.25) and shrinks towards either
+extreme. A 50/50 system is the most unpredictable; a 95% system is nearly a
+foregone conclusion each time.
+"""
+    )
+
+    st.markdown(
+        """
+**Step 3 — turn the count into a rate**
+
+You do not report "44 winners", you report "44%". That means dividing by $n$:
+$\\hat{W} = k/n$. A rule of variance is that dividing a quantity by a constant
+divides its variance by the **square** of that constant:
+"""
     )
     st.latex(
-        r"\mathrm{Var}(\hat{W}) = \frac{n W (1-W)}{n^{2}} = \frac{W(1-W)}{n}"
-        r"\qquad\Rightarrow\qquad \mathrm{SE}(\hat{W}) = \sqrt{\frac{W(1-W)}{n}}"
+        r"\mathrm{Var}(\hat{W}) = \frac{n\,W(1-W)}{n^{2}} = \frac{W(1-W)}{n}"
+    )
+
+    st.markdown("Taking the square root gives the standard error:")
+    st.latex(r"\mathrm{SE}(\hat{W}) = \sqrt{\frac{W(1-W)}{n}}")
+
+    st.markdown(
+        """
+**Why $\\sqrt{n}$ matters so much.** The $n$ sits under a square root, so error
+falls *slowly*. To halve your uncertainty you need **four times** the trades; to
+reduce it tenfold, a hundred times. This is the single most important practical
+consequence on this page — precision is bought at a punishing exchange rate.
+"""
     )
 
     st.markdown(
-        "Note the $\\sqrt{n}$: to **halve** the error you need **four times** "
-        "the trades. Precision is expensive."
+        """
+**Worked example.** A 44% system measured over 100 trades:
+"""
+    )
+    st.latex(
+        r"\mathrm{SE} = \sqrt{\frac{0.44 \times 0.56}{100}}"
+        r" = \sqrt{0.00246} = 0.0496 \approx 5\text{ pp}"
+    )
+    st.markdown(
+        """
+The 95% interval is $\\hat{W} \\pm 1.96 \\times 5 = \\pm 9.7$ percentage
+points — so a measured 44% is consistent with anything from **34% to 54%**.
+After a hundred trades you barely know which side of break-even you are on.
+"""
     )
 
     st.markdown(
-        "For a confidence interval of $\\pm e$, set $z\\,\\mathrm{SE} = e$ and "
-        "solve for $n$:"
+        """
+**Step 4 — how many trades for a target precision**
+
+If you want the interval to be no wider than $\\pm e$, set $z\\,\\mathrm{SE} = e$
+and rearrange for $n$:
+"""
     )
     st.latex(r"n = \frac{z^{2}\,W(1-W)}{e^{2}}")
 
     st.markdown(
-        "That is the error on the *win rate*. What we actually care about is the "
-        "error on the **edge**. Since $E = W(R+1) - 1$ is linear in $W$, the "
-        "error passes straight through, multiplied by the slope:"
+        """
+**Step 5 — carry the error through to the edge**
+
+Knowing the win rate is not the goal; knowing the **edge** is. Recall from the
+Expectancy page that $E = W(R+1) - 1$. This is a straight line in $W$ with slope
+$(R+1)$, so an error in $W$ becomes an error in $E$ that is $(R+1)$ times
+larger:
+"""
     )
     st.latex(r"\mathrm{SE}(E) = (R+1)\,\mathrm{SE}(\hat{W})")
 
     st.markdown(
-        "The edge is only believable once its lower confidence bound clears "
-        "zero, so require $E - z\\,\\mathrm{SE}(E) > 0$:"
+        """
+For the 44% / 2R system above: $\\mathrm{SE}(E) = 3 \\times 0.0496 = 0.149$R.
+The edge is 0.32R, so the 95% interval runs from **0.03R to 0.61R**. Positive,
+but only just — and that is with a hundred trades behind you.
+"""
     )
-    st.latex(
-        r"E > z\,(R+1)\sqrt{\frac{W(1-W)}{n}}"
-        r"\qquad\Rightarrow\qquad"
-        r"n > \frac{z^{2}(R+1)^{2}W(1-W)}{E^{2}}"
+
+    st.markdown(
+        """
+**Step 6 — when is the edge believable?**
+
+An edge is only credible once even the *pessimistic* end of the interval is
+above zero. So require $E - z\\,\\mathrm{SE}(E) > 0$:
+"""
+    )
+    st.latex(r"E > z\,(R+1)\sqrt{\frac{W(1-W)}{n}}")
+
+    st.markdown("Squaring both sides and solving for $n$:")
+    st.latex(r"n > \frac{z^{2}\,(R+1)^{2}\,W(1-W)}{E^{2}}")
+
+    st.markdown(
+        """
+Read the three factors:
+
+- $(R+1)^{2}$ — **high reward-to-risk hurts badly here.** Going from 2R to 5R
+  multiplies the required trades by $(6/3)^{2} = 4$.
+- $W(1-W)$ — a win rate near 50% needs more trades, near the extremes fewer.
+- $E^{2}$ — a **thin edge is brutally expensive**. Halving your edge quadruples
+  the evidence required.
+"""
     )
 
     st.markdown(
