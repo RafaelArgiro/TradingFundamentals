@@ -100,3 +100,14 @@ def edge_bound_curve(
 def normal_approximation_is_safe(win_rate: float, n_trades: int) -> bool:
     """Whether the usual rule of thumb for the normal approximation holds."""
     return min(n_trades * win_rate, n_trades * (1 - win_rate)) >= 10
+
+
+def normal_curve(lo: float = -4.0, hi: float = 4.0, n_points: int = 400) -> pd.DataFrame:
+    """Standard normal density, in units of standard deviations from the mean.
+
+    Columns: `z`, `density`. Used to draw the confidence interval schematic.
+    """
+    if hi <= lo:
+        raise ValueError("hi must exceed lo")
+    z = np.linspace(lo, hi, n_points)
+    return pd.DataFrame({"z": z, "density": np.exp(-0.5 * z**2) / np.sqrt(2 * np.pi)})

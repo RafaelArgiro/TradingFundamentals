@@ -7,6 +7,7 @@ from tfcore.measurement import (
     edge_lower_bound,
     expectancy_standard_error,
     normal_approximation_is_safe,
+    normal_curve,
     trades_for_win_rate_margin,
     trades_to_prove_edge,
     win_rate_standard_error,
@@ -102,3 +103,28 @@ def test_unknown_confidence_is_rejected():
 def test_normal_approximation_guard():
     assert not normal_approximation_is_safe(0.22, 20)
     assert normal_approximation_is_safe(0.22, 200)
+
+
+def test_normal_curve_peaks_at_the_mean():
+    curve = normal_curve()
+    peak = curve.loc[curve["density"].idxmax()]
+    assert peak["z"] == pytest.approx(0.0, abs=0.02)
+    assert peak["density"] == pytest.approx(1 / np.sqrt(2 * np.pi), rel=1e-3)
+
+
+def test_normal_curve_is_symmetric():
+    curve = normal_curve(-3, 3, n_points=301)
+    np.testing.assert_allclose(
+        curve["density"].to_numpy(), curve["density"].to_numpy()[::-1], atol=1e-12
+    )
+
+
+def test_normal_curve_integrates_to_one():
+    curve = normal_curve(-6, 6, n_points=4001)
+    area = np.trapezoid(curve["density"], curve["z"])
+    assert area == pytest.approx(1.0, abs=1e-4)
+
+
+def test_normal_curve_rejects_inverted_range():
+    with pytest.raises(ValueError, match="hi must exceed lo"):
+        normal_curve(2, 1)

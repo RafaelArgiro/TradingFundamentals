@@ -13,9 +13,11 @@ from tfcore.expectancy import expectancy
 from tfcore.measurement import (
     edge_bound_curve,
     expectancy_standard_error,
+    normal_curve,
     trades_for_win_rate_margin,
     trades_to_prove_edge,
     win_rate_standard_error,
+    z_for,
 )
 from tfcore.simulation import (
     equity_percentiles,
@@ -648,7 +650,7 @@ else:
 
 st.divider()
 
-st.subheader("Measuring win rate")
+st.subheader("Measuring win rate and expectancy")
 
 st.markdown(
     """
@@ -669,30 +671,172 @@ st.markdown(
     """
 **The jargon, in plain terms**
 
-- **Standard error (SE)** — the typical distance between your measurement and
-  the truth. Not a mistake you made; just the unavoidable wobble from having
-  only a limited number of trades. An SE of 5 percentage points means a measured
-  44% could comfortably be a true 39% or 49%.
-- **Confidence interval** — the range of true values that could plausibly have
-  produced what you saw. "95% confident" means: if you repeated the whole
-  exercise many times, the interval would contain the truth 19 times out of 20.
-- **$z$** — how many standard errors wide you draw that interval. For 95% it is
-  **1.96**; for 90% it is 1.645; for 99% it is 2.576. Higher confidence means a
-  wider interval.
+- **Standard error (SE)** — this is nothing more than a **standard deviation**,
+  of your *measurement* of your win rate. Imagine running the same
+  100 trades over and over in parallel universes: each run would hand you a
+  slightly different measured win rate. Those measurements scatter around the
+  true value, and the SE is their σ. So "SE = 5 pp" means a typical measurement
+  lands about 5 percentage points away from the truth.
+- **Confidence interval** — the percentage range within which the true win rate is expected to lie.
+  Saying "95% confident" means that if you repeated the whole exercise many times, this interval would
+  contain the true win rate in about 19 attempts out of 20. In other words: the confidence interval is simply *measured win rate ± z·SE*.
+- **$z$** — how many σ wide the confidence interval is.
+  The familiar sigma rules apply directly: **±1σ catches 68%** of cases, **±2σ catches 95%**,
+  **±3σ catches 99.7%**. The exact figure for 95% is 1.96σ, which is where the
+  number 1.96 keeps coming from.
 - **$n$** — the number of trades you have observed.
+
+
+
+Everything below is just those three ideas applied to a win rate.
+"""
+)
+
+schematic_curve = normal_curve()
+band_68 = schematic_curve[schematic_curve["z"].abs() <= 1]
+band_95 = schematic_curve[schematic_curve["z"].abs() <= 1.96]
+
+schematic = go.Figure()
+schematic.add_trace(
+    go.Scatter(
+        x=band_95["z"],
+        y=band_95["density"],
+        mode="lines",
+        line=dict(width=0),
+        fill="tozeroy",
+        fillcolor="rgba(76, 120, 168, 0.20)",
+        hoverinfo="skip",
+    )
+)
+schematic.add_trace(
+    go.Scatter(
+        x=band_68["z"],
+        y=band_68["density"],
+        mode="lines",
+        line=dict(width=0),
+        fill="tozeroy",
+        fillcolor="rgba(76, 120, 168, 0.45)",
+        hoverinfo="skip",
+    )
+)
+schematic.add_trace(
+    go.Scatter(
+        x=schematic_curve["z"],
+        y=schematic_curve["density"],
+        mode="lines",
+        line=dict(width=2.5, color="#4c78a8"),
+        hoverinfo="skip",
+    )
+)
+
+for position, dash in ((0, "solid"), (-1, "dot"), (1, "dot"), (-1.96, "dash"), (1.96, "dash")):
+    schematic.add_vline(
+        x=position,
+        line_width=1.5,
+        line_dash=dash,
+        line_color="#444444",
+    )
+
+schematic.add_annotation(
+    x=0, y=0.20, text="68%  (±1σ)", showarrow=False, font=dict(size=13, color="#1b3a57")
+)
+schematic.add_annotation(
+    x=0, y=0.055, text="95%  (±1.96σ)", showarrow=False, font=dict(size=13, color="#1b3a57")
+)
+schematic.add_annotation(
+    x=0,
+    y=0.425,
+    text="your measurement",
+    showarrow=False,
+    font=dict(size=12, color="#444444"),
+)
+schematic.add_annotation(
+    x=2.9,
+    y=0.30,
+    text="the true value lives<br>somewhere under this curve",
+    showarrow=False,
+    align="center",
+    font=dict(size=11, color="#666666"),
+)
+
+schematic.update_layout(
+    height=330,
+    showlegend=False,
+    margin=dict(t=30, r=20, b=50, l=20),
+)
+schematic.update_xaxes(
+    title="Distance from the measurement, in standard errors (σ)",
+    tickmode="array",
+    tickvals=[-1.96, -1, 0, 1, 1.96],
+    ticktext=["−1.96σ", "−1σ", "measured", "+1σ", "+1.96σ"],
+    range=[-4, 4],
+    zeroline=False,
+)
+schematic.update_yaxes(visible=False, range=[0, 0.47])
+
+st.plotly_chart(
+    schematic,
+    width="stretch",
+    config={
+        "displaylogo": False,
+        "staticPlot": True,
+        "toImageButtonOptions": {"format": "png", "filename": "confidence_schematic"},
+    },
+)
+
+st.caption(
+    "One standard error is one σ. Widening the net to ±1.96σ raises the chance "
+    "of capturing the true value from 68% to 95% — **higher confidence always "
+    "costs you a wider, vaguer interval.** The only way to narrow it without "
+    "losing confidence is to collect more trades, which shrinks σ itself."
+)
+
+st.markdown(
+    """
+The standard deviation of the win rate as a function of the true win rate and the number of trades, can be calculated using the formula below.
 """
 )
 
 st.latex(r"\mathrm{SE}(\hat{W}) = \sqrt{\frac{W(1-W)}{n}}")
 
-st.latex(r"n_{\text{prove}} = \frac{z^{2}\,(R+1)^{2}\,W(1-W)}{E^{2}}")
+st.markdown(
+    """
+Turning that around gives the number of trades needed to measure the win rate to
+a chosen precision. If you want the interval to be no wider than $\\pm e$ — for
+example $e = 0.05$ for five percentage points — then you need:
+"""
+)
+
+st.latex(r"n_{\text{measure}} = \frac{z^{2}\,W(1-W)}{e^{2}}")
 
 st.markdown(
     """
-The first formula says how wobbly your measured win rate is. The second says how
-many trades you need before you can honestly claim the system makes money.
+Reading the three parts:
+
+- $z^{2}$ — **demanding more confidence costs trades.** Going from 95% to 99%
+  raises $z$ from 1.96 to 2.576, so the requirement grows by
+  $(2.576/1.96)^{2} \\approx 1.7$ times.
+- $W(1-W)$ — **how unpredictable each trade is.** This peaks at 0.25 for a 50%
+  win rate and falls towards zero at either extreme, so a coin-flip system takes
+  the most trades to pin down and a lopsided one the fewest.
+- $e^{2}$ — **precision is the expensive part.** The margin is squared, so
+  asking for half the error means four times the trades, and a tenth of the
+  error means a hundred times.
+
+This is the formula behind the "Trades for ±X pp" column in the table below.
+Note what is *absent*: reward-to-risk plays no role, because how often you win
+has nothing to do with how much you win.
 """
 )
+
+st.markdown(
+    """
+The number of trades required to "prove" the expectancy within the desired confidence level can be calculated using the formula below.
+"""
+)
+
+st.latex(r"n_{\text{prove}} = \frac{z^{2}\,(R+1)^{2}\,W(1-W)}{E^{2}}")
+
 
 with st.expander("Derivation, step by step"):
     st.markdown(
@@ -774,11 +918,36 @@ After a hundred trades you barely know which side of break-even you are on.
         """
 **Step 4 — how many trades for a target precision**
 
-If you want the interval to be no wider than $\\pm e$, set $z\\,\\mathrm{SE} = e$
-and rearrange for $n$:
+The confidence interval has half-width $z\\,\\mathrm{SE}$. Call the precision you
+want $e$, so the interval should be $\\pm e$.
+
+**4a.** Set the half-width equal to the target:
 """
     )
+    st.latex(r"z\,\mathrm{SE}(\hat{W}) = e")
+
+    st.markdown("**4b.** Substitute the standard error from step 3:")
+    st.latex(r"z\,\sqrt{\frac{W(1-W)}{n}} = e")
+
+    st.markdown("**4c.** Divide both sides by $z$:")
+    st.latex(r"\sqrt{\frac{W(1-W)}{n}} = \frac{e}{z}")
+
+    st.markdown("**4d.** Square both sides, both being positive:")
+    st.latex(r"\frac{W(1-W)}{n} = \frac{e^{2}}{z^{2}}")
+
+    st.markdown("**4e.** Cross-multiply and solve for $n$:")
     st.latex(r"n = \frac{z^{2}\,W(1-W)}{e^{2}}")
+
+    st.markdown(
+        """
+**Sanity check.** A 44% system, measured to $\\pm 5$ percentage points at 95%
+confidence, so $z = 1.96$, $W(1-W) = 0.2464$ and $e = 0.05$:
+"""
+    )
+    st.latex(
+        r"n = \frac{1.96^{2} \times 0.2464}{0.05^{2}}"
+        r" = \frac{3.842 \times 0.2464}{0.0025} \approx 379"
+    )
 
     st.markdown(
         """
@@ -804,17 +973,61 @@ but only just — and that is with a hundred trades behind you.
         """
 **Step 6 — when is the edge believable?**
 
-An edge is only credible once even the *pessimistic* end of the interval is
-above zero. So require $E - z\\,\\mathrm{SE}(E) > 0$:
+An edge is only credible once even the *pessimistic* end of the confidence
+interval sits above zero. If the interval still includes zero, "this system
+loses money" remains a live possibility.
+
+**6a.** Write down the requirement. The interval runs from
+$E - z\\,\\mathrm{SE}(E)$ to $E + z\\,\\mathrm{SE}(E)$, and we want its lower
+end to be positive:
 """
     )
+    st.latex(r"E - z\,\mathrm{SE}(E) > 0")
+
+    st.markdown("**6b.** Move the second term to the right-hand side:")
+    st.latex(r"E > z\,\mathrm{SE}(E)")
+
+    st.markdown("**6c.** Substitute the result from step 5, $\\mathrm{SE}(E) = (R+1)\\,\\mathrm{SE}(\\hat{W})$:")
+    st.latex(r"E > z\,(R+1)\,\mathrm{SE}(\hat{W})")
+
+    st.markdown("**6d.** Substitute the standard error itself, from step 3:")
     st.latex(r"E > z\,(R+1)\sqrt{\frac{W(1-W)}{n}}")
 
-    st.markdown("Squaring both sides and solving for $n$:")
+    st.markdown(
+        """
+**6e.** Square both sides. This is only legitimate because both sides are
+positive — we are considering a profitable system, so $E > 0$, and the
+right-hand side is a square root multiplied by positive constants. Squaring a
+positive inequality preserves its direction.
+"""
+    )
+    st.latex(r"E^{2} > z^{2}\,(R+1)^{2}\,\frac{W(1-W)}{n}")
+
+    st.markdown(
+        "**6f.** Multiply both sides by $n$. Since $n$ is a positive trade "
+        "count, the direction is again unchanged:"
+    )
+    st.latex(r"n\,E^{2} > z^{2}\,(R+1)^{2}\,W(1-W)")
+
+    st.markdown("**6g.** Finally divide both sides by $E^{2}$, which is positive:")
     st.latex(r"n > \frac{z^{2}\,(R+1)^{2}\,W(1-W)}{E^{2}}")
 
     st.markdown(
         """
+**Sanity check.** Put the 44% / 2R system in: $z = 1.96$, $R + 1 = 3$,
+$W(1-W) = 0.2464$, $E = 0.32$.
+"""
+    )
+    st.latex(
+        r"n > \frac{1.96^{2} \times 3^{2} \times 0.2464}{0.32^{2}}"
+        r" = \frac{3.842 \times 9 \times 0.2464}{0.1024} \approx 83"
+    )
+
+    st.markdown(
+        """
+So about **83 trades** before that system's edge is distinguishable from zero —
+matching the table below.
+
 Read the three factors:
 
 - $(R+1)^{2}$ — **high reward-to-risk hurts badly here.** Going from 2R to 5R
@@ -853,15 +1066,20 @@ margin_pp = margin_col.number_input(
 )
 
 measurement = []
+interval_column = f"{confidence}% interval at 100 trades (R)"
 for name, rr, wr in zip(
     systems["System"], systems["RR"], systems["Win rate (%)"], strict=True
 ):
     win_rate = float(wr) / 100
+    edge = expectancy(to_inputs(float(wr), float(rr)))
+    se_edge = expectancy_standard_error(win_rate, float(rr), 100)
+    half_width = z_for(confidence) * se_edge
     measurement.append(
         {
             "System": name,
             "RR": float(rr),
             "Win rate (%)": float(wr),
+            "Expectancy (R)": edge,
             f"Trades for ±{margin_pp:g}pp": trades_for_win_rate_margin(
                 win_rate, margin_pp / 100, confidence
             ),
@@ -869,8 +1087,10 @@ for name, rr, wr in zip(
                 win_rate, float(rr), confidence
             ),
             "SE of W at 100 trades (pp)": win_rate_standard_error(win_rate, 100) * 100,
-            "SE of E at 100 trades (R)": expectancy_standard_error(
-                win_rate, float(rr), 100
+            "SE of E at 100 trades (R)": se_edge,
+            "E / SE at 100 trades": edge / se_edge,
+            interval_column: (
+                f"{edge - half_width:+.3f}  |  {edge:+.3f}  |  {edge + half_width:+.3f}"
             ),
         }
     )
@@ -881,6 +1101,9 @@ show_table(
     column_config={
         "RR": st.column_config.NumberColumn(format="%.2f"),
         "Win rate (%)": st.column_config.NumberColumn(format="%.1f"),
+        "Expectancy (R)": st.column_config.NumberColumn(
+            format="%+.3f", help="The edge implied by this RR and win rate."
+        ),
         f"Trades for ±{margin_pp:g}pp": st.column_config.NumberColumn(
             format="%.0f",
             help="Trades needed to measure the win rate to this precision.",
@@ -895,30 +1118,84 @@ show_table(
         "SE of E at 100 trades (R)": st.column_config.NumberColumn(
             format="%.3f", help="The same error carried through to expectancy."
         ),
+        "E / SE at 100 trades": st.column_config.NumberColumn(
+            format="%.2f",
+            help="How many standard errors the edge sits above zero. Below 2, unproven.",
+        ),
+        interval_column: st.column_config.TextColumn(
+            help="Lower bound | expectancy | upper bound, at the chosen confidence.",
+        ),
     },
     formats={
         "RR": "{:.2f}",
         "Win rate (%)": "{:.1f}",
+        "Expectancy (R)": "{:+.3f}",
         f"Trades for ±{margin_pp:g}pp": "{:.0f}",
         "Trades to prove edge": "{:.0f}",
         "SE of W at 100 trades (pp)": "{:.1f}",
         "SE of E at 100 trades (R)": "{:.3f}",
+        "E / SE at 100 trades": "{:.2f}",
     },
 )
 
 st.markdown(
     """
-**The comparison that matters.** Look at the two "trades" columns — they rank
-the systems in *opposite* directions.
+**What each column means**
 
-- Measuring the **win rate** to a fixed precision is *easiest* for the low win
-  rate system, because $W(1-W)$ is largest at 50% and shrinks towards either
-  extreme.
-- Proving the **edge** is *hardest* for that same system, because the
-  $(R+1)^{2}$ factor magnifies every remaining scrap of win rate error.
+- **Expectancy** — the edge implied by the RR and win rate as entered, with no
+  uncertainty attached. It is the number every other column is judged against.
+- **Trades for ±X pp** — how many trades you need before the win rate itself is
+  pinned down to within X percentage points, at the confidence level chosen
+  above. Read it as: *"until I have this many trades, I do not really know my
+  win rate to that precision."* It depends only on the win rate and the
+  confidence demanded, not on the reward-to-risk — measuring how often you win
+  has nothing to do with how much you win.
+- **Trades to prove edge** — how many trades before the pessimistic end of the
+  confidence interval on expectancy rises above zero. Below this count, "the
+  system loses money" is still a possibility you cannot rule out. This is the
+  more demanding and more honest of the two, because it is the question you
+  actually care about. A backtest shorter than this number has not demonstrated
+  an edge, however good the equity curve looks.
+- **SE of W at 100 trades** — the one-sigma standard deviation on the measured win rate
+  after a fixed 100 trades, in percentage points. It is a snapshot of
+  measurement quality at a common sample size, so systems can be compared
+  like-for-like. Multiply by roughly 2 to get the 95% interval: an SE of 4 pp
+  means a measured win rate could plausibly be 8 points either side of the
+  truth.
+- **SE of E at 100 trades** — the same one-sigma standard deviation uncertainty, carried through to
+  expectancy in R. It is the win rate error multiplied by $(R+1)$, so a
+  high reward-to-risk system amplifies the same measurement wobble into a much
+  larger uncertainty about its edge. **Compare this number against the system's
+  actual expectancy**: if the standard error is a large fraction of the edge,
+  the edge is not yet established, regardless of what the point estimate says.
+- **E / SE at 100 trades** — how many standard
+  errors the edge sits above zero after 100 trades. This is the single most
+  useful column. Under 1, the edge is indistinguishable from noise; around 2 it
+  becomes statistically credible; above 3 it is solid. The same ratio at a
+  different trade count scales with $\\sqrt{n}$, so quadrupling the trades
+  doubles it.
+- **Interval** — the pessimistic bound, the expectancy, and the optimistic
+  bound, after 100 trades at the confidence you selected. Read the left-hand
+  number first: that is the worst the system might really be, given what a
+  100-trade sample can tell you. **If it is negative, the system has not been
+  shown to work.** The width of the whole range is a direct picture of how much
+  you still do not know.
+"""
+)
 
-So a high-RR system gives you a precise win rate and an unreliable edge at the
-same time. Precision on the input is not the same thing as confidence in the
+st.markdown(
+    """
+**The comparison that matters.** The two "trades" columns can rank systems in
+*opposite* directions, and understanding why is the point of this section.
+
+- Measuring the **win rate** to a fixed precision is easiest when the win rate
+  sits far from 50%, because $W(1-W)$ peaks in the middle and shrinks towards
+  either extreme.
+- Proving the **edge** gets harder as reward-to-risk rises, because the
+  $(R+1)^{2}$ factor magnifies whatever win rate error remains.
+
+So a high-RR system can hand you a precise win rate and an unreliable edge at
+the same time. Precision on the input is not the same thing as confidence in the
 conclusion.
 """
 )
