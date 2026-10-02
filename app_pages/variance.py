@@ -620,9 +620,8 @@ else:
     )
 
     st.caption(
-        "Drawdown is measured in R, so at 1% risk per trade a 20R drawdown is "
-        "roughly a 20% account decline. Note that the systems share an edge yet "
-        "differ sharply here — **variance, not expectancy, sets the pain.**"
+        "Drawdown is measured in R. Note that even if systems share an edge yet "
+        "they can differ sharply here — **variance, not expectancy, sets the pain.**"
     )
 
 st.divider()
