@@ -68,7 +68,7 @@ The Expectancy page answered one question: *does this system make money?* It
 answers it with a single number, and that number is an **average over infinitely
 many trades**.
 
-You do not get infinitely many trades. You get a few hundred, in one particular
+You do not get infinitely many trades. You get a finite number of trades, in a particular
 order, and what you actually experience is a single path drawn from a very wide
 distribution of possible paths. Two systems with identical expectancy can deliver
 completely different journeys — different swings, different drawdowns, and
@@ -113,11 +113,11 @@ st.subheader("Equity curve")
 
 st.markdown(
     """
-Each system is simulated many times over. Drawing every run would be an
-unreadable mess, so each system is summarised as a **fan**: the solid line is the
+Each trading system is simulated for the specified number of trades resulting in a single path.
+This is repeated for a certain number of runs to capture the variability of outcomes.
+The result is a distribution of possible outcomes, which are drawn as a **fan**: the solid line is the
 median outcome, the darker band holds the middle 50% of runs, and the lighter
-band holds 80%. The wider the fan, the less the single path you happen to live
-through tells you about the system.
+band holds 80%. The wider the fan, the larger the variance of that particular trading system.
 """
 )
 
@@ -316,13 +316,47 @@ else:
 The same simulations, reduced to their final result. Every panel shares one
 x-axis, so the width of each histogram is directly comparable — that width *is*
 the variance.
+"""
+    )
 
-The shapes are **combs, not smooth curves**, and that is correct. After $n$
-trades exactly $k$ can be winners, so the final result can only take the $n+1$
-values $k R - (n - k)$ — spaced $(R+1)$ apart. A 5R system with 100 trades has
-possible outcomes 6R apart, so its histogram is a picket fence no matter how
-many simulations you run. More simulations make the *envelope* smoother, never
-the gaps.
+    st.markdown(
+        """
+**Why the shapes look like combs rather than smooth curves**
+
+This is not a glitch, and more simulations will not fix it. The reason is that
+a run can only ever finish on a small set of specific values.
+
+Think about what determines the final result. Every trade either wins $R$ or
+loses $1R$ — there is nothing in between. So the only thing that varies between
+runs is **how many of the trades were winners**. Call that number $k$. Over 100
+trades, $k$ can be 0, or 1, or 2, and so on up to 100 — 101 possibilities, and
+nothing in between, because you cannot have half a winning trade.
+
+Each value of $k$ produces exactly one final result: you collect $R$ from each
+of the $k$ winners and pay $1R$ on each of the $n - k$ losers.
+"""
+    )
+    st.latex(r"\text{final result} = k \cdot R - (n - k) \cdot 1")
+
+    st.markdown(
+        """
+Now ask what happens if one extra trade had been a winner instead of a loser.
+You gain $R$ that you did not have, and you avoid losing $1R$ — so the final
+result jumps by $R + 1$. **That jump is the gap between neighbouring teeth in
+the comb.**
+
+For a 5R system the gap is $5 + 1 = 6$R. There is simply no run anywhere in the
+simulation that finishes 1R or 2R or 3R away from another — the outcomes come in
+steps of 6R, and the empty space between them stays empty forever. For a 0.88R
+system the gap is only 1.88R, so its teeth sit much closer together and the
+histogram looks far smoother.
+
+Running more simulations fills each tooth higher and makes the overall
+**outline** of the distribution cleaner, but it can never place a bar in a gap,
+because no such outcome exists. If you want a visually smoother shape you have
+two options: raise the trade count, which makes the steps small relative to the
+total range, or lower the bin count below, which merges neighbouring teeth into
+a single bar.
 """
     )
 
@@ -419,11 +453,11 @@ the gaps.
         spread.add_annotation(
             xref="x domain",
             yref="y domain",
-            x=0.99,
+            x=0.01,
             y=0.95,
             text=f"{profitable:.1%} profitable",
             showarrow=False,
-            xanchor="right",
+            xanchor="left",
             font=dict(size=13, color=color),
             bgcolor="rgba(255,255,255,0.75)",
             borderpad=3,
@@ -433,11 +467,11 @@ the gaps.
         spread.add_annotation(
             xref="x domain",
             yref="y domain",
-            x=0.99,
+            x=0.01,
             y=0.78,
             text=f"σ = {sigma:.0f}R",
             showarrow=False,
-            xanchor="right",
+            xanchor="left",
             font=dict(size=12, color=color),
             bgcolor="rgba(255,255,255,0.75)",
             borderpad=3,
