@@ -1597,4 +1597,101 @@ st.divider()
 
 st.subheader("Conclusion")
 
-st.info("To be written once the sections above are complete.")
+st.markdown(
+    """
+**Expectancy of a trading system describes the theoretical destination. Variance describes the journey — and the
+journey is the part you have to live through.** Two systems built to the same
+edge produced the same median outcome in every simulation above, yet one arrived
+there in a narrow band while the other swung across a range several times wider.
+When looking at the median, both are equally profitable, however a system with
+higher variance is more difficult to hold on to as you need the psychological fortitude to withstand larger swings.
+"""
+)
+
+st.markdown(
+    """
+**What the simulations showed**
+
+The fan charts and histograms make the same point from two directions: the
+average outcome is not the typical experience. Expectancy is the centre of a
+distribution, and the width of that distribution grows with the reward-to-risk
+ratio. A system that wins rarely but large collects its edge in infrequent
+lumps, so over any realistic number of trades the result depends heavily on how
+many of those lumps happened to land inside your sample.
+
+The drawdown table turns that abstraction into something concrete. Losing
+streaks are governed almost entirely by the win rate, not by expectancy at all:
+the lower the win rate, the longer the stretches of consecutive losses and the
+deeper the holes. Because drawdown is measured in R, the translation to your
+account is direct — a 20R drawdown at 1% risk per trade is a 20% decline. The
+systems being compared share an identical edge, and yet the pain they inflict
+differs significantly. **Variance, not expectancy, sets how hard a
+system is to trade.**
+"""
+)
+
+st.markdown(
+    """
+**What the measurement maths showed**
+
+The second half of the page attacks a different illusion. Every win rate you
+quote is an estimate taken from a finite sample, and it carries a standard error
+of $\\sqrt{W(1-W)/n}$. That error does not vanish quickly: it shrinks with the
+square root of the trade count, so quadrupling your sample only halves your
+uncertainty.
+
+What makes this sharper than it first appears is that the corresponding error for the expectancy $E$ does not stay
+confined to the win rate. It is multiplied by $(R+1)$ on its way into the edge,
+so the higher the reward-to-risk, the more a small misreading of the win rate
+distorts your view of profitability.
+
+That leads to an awkward pairing. A high reward-to-risk system normally comes
+with a low win rate, and a low win rate is **easy** to measure precisely —
+there is not much ambiguity in a system that wins twice in ten. Yet the *edge*
+of that same system is the **hardest** of all to confirm, because the $(R+1)$
+multiplier turns even a small win rate error into a large uncertainty about
+whether the system makes money at all. Knowing an input precisely is not the
+same thing as knowing the conclusion confidently.
+
+Now combine that with the first half of the page, and a trap appears. A high
+reward-to-risk system works against you in two ways at once:
+
+1. **Its outcomes are widely spread.** An ordinary unlucky stretch can leave you
+   far below the median for a long time, with nothing actually wrong.
+2. **Its edge takes many trades to confirm.** During that same stretch you have
+   no statistical grounds to argue the system is fine.
+
+The result is a long window in which the system looks broken and you cannot
+prove that it is not — which is precisely the window in which most people
+abandon it.
+"""
+)
+
+st.markdown(
+    """
+**What to do with this**
+
+- **Be careful to judge a system from a trading trajectory as this is only a single path you happened to get.**
+  Remember this when looking at the results of a backtest or a live trading trajectory.
+- **Expect the losing streaks.** They are a prediction of the model, not a sign
+  that anything has broken. Knowing in advance that a given win rate implies a
+  streak of a certain length removes most of its power to make you abandon a
+  working system.
+- **Treat an edge as unproven until you have enough data to confidenly say that the expectancy
+  is at least two standard errors above zero.** The calculator reports exactly this. Below 2σ, the honest statement is
+  "I do not yet know", regardless of how good the running total looks.
+- **Winrates are hard to verify as you need a lot of trades (large sample size) irrespective of the exact trading system.**
+- **Expectancy (edges) is easier to verify early.**
+- **Remember what is still missing.** Everything here is measured per trade and
+  assumes the win rate and reward-to-risk stay constant. Trade frequency,
+  changing market conditions, and your own consistency are not modelled, and all
+  three matter.
+"""
+)
+
+st.markdown(
+    """
+The single sentence worth carrying away: **a positive expectancy tells you a
+system is worth trading in the long run, but the variance tells you what to expect along the way.**
+"""
+)
