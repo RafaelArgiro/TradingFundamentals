@@ -9,10 +9,11 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
-from tfcore.expectancy import expectancy
+from tfcore.expectancy import expectancy, expectancy_from_rr, required_win_rate
 from tfcore.measurement import (
     edge_bound_curve,
     expectancy_standard_error,
+    normal_approximation_is_safe,
     normal_curve,
     trades_for_win_rate_margin,
     trades_to_prove_edge,
@@ -1185,8 +1186,25 @@ st.markdown(
 
 st.markdown(
     """
-**The comparison that matters.** The two "trades" columns can rank systems in
-*opposite* directions, and understanding why is the point of this section.
+**The comparison that matters**
+
+The two "trades" columns answer questions that sound almost identical — *how
+long until I know my win rate?* and *how long until I know I have an edge?* —
+yet they can rank the same set of systems in **opposite** directions. Seeing why
+is the point of this whole section.
+
+The first column is driven by $W(1-W)$, which measures how unpredictable an
+individual trade is. It peaks at 0.25 when the win rate is 50% and falls away
+towards either extreme, because a lopsided system is already fairly predictable:
+if you win 9 times in 10, very few samples are needed to establish that. The
+reward-to-risk never enters this calculation at all.
+
+The second column keeps that same $W(1-W)$ term but multiplies it by
+$(R+1)^{2}$ and divides by $E^{2}$. Those two extra factors change everything.
+A large reward-to-risk means each remaining scrap of win rate error is magnified
+into a much bigger uncertainty about the edge, and a thin edge leaves less room
+for that uncertainty to live in. So the very systems whose win rate is easiest
+to measure can be the hardest to validate.
 
 - Measuring the **win rate** to a fixed precision is easiest when the win rate
   sits far from 50%, because $W(1-W)$ peaks in the middle and shrinks towards
@@ -1194,92 +1212,386 @@ st.markdown(
 - Proving the **edge** gets harder as reward-to-risk rises, because the
   $(R+1)^{2}$ factor magnifies whatever win rate error remains.
 
-So a high-RR system can hand you a precise win rate and an unreliable edge at
-the same time. Precision on the input is not the same thing as confidence in the
-conclusion.
+The practical consequence is worth stating plainly: a high reward-to-risk system
+can hand you a precise win rate and an unreliable edge at the same time.
+**Precision on the input is not the same thing as confidence in the
+conclusion**, and only the second one tells you whether the system is worth
+trading.
 """
 )
 
-bound_colors = system_colors(systems["System"])
-max_trades = int(
-    max(
-        trades_to_prove_edge(float(wr) / 100, float(rr), confidence)
-        for rr, wr in zip(systems["RR"], systems["Win rate (%)"], strict=True)
+with st.expander("Worst-case edge still consistent with the data"):
+    bound_colors = system_colors(systems["System"])
+    max_trades = int(
+        max(
+            trades_to_prove_edge(float(wr) / 100, float(rr), confidence)
+            for rr, wr in zip(systems["RR"], systems["Win rate (%)"], strict=True)
+        )
+        * 1.6
     )
-    * 1.6
+
+    bounds = go.Figure()
+    for name, rr, wr in zip(
+        systems["System"], systems["RR"], systems["Win rate (%)"], strict=True
+    ):
+        curve = edge_bound_curve(float(wr) / 100, float(rr), max_trades, confidence)
+        needed = trades_to_prove_edge(float(wr) / 100, float(rr), confidence)
+        bounds.add_trace(
+            go.Scatter(
+                x=curve["trades"],
+                y=curve["lower"],
+                mode="lines",
+                name=str(name),
+                line=dict(width=2.5, color=bound_colors[name]),
+                hovertemplate=(
+                    f"{name}<br>%{{x}} trades → worst case %{{y:+.3f}}R<extra></extra>"
+                ),
+            )
+        )
+        bounds.add_trace(
+            go.Scatter(
+                x=[needed],
+                y=[0],
+                mode="markers+text",
+                marker=dict(size=11, color=bound_colors[name], symbol="diamond"),
+                text=[f"{needed:.0f}"],
+                textposition="bottom center",
+                textfont=dict(size=12, color=bound_colors[name]),
+                showlegend=False,
+                hovertemplate=f"{name} needs %{{x:.0f}} trades<extra></extra>",
+            )
+        )
+
+    bounds.add_hline(y=0, line_width=2, line_color=ZERO_LINE_COLOR)
+    bounds.update_layout(
+        title=dict(
+            text=f"Worst-case edge still consistent with the data ({confidence}%)",
+            font=dict(size=16),
+        ),
+        height=460,
+        margin=dict(t=80, r=30, b=50, l=70),
+        legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="left", x=0),
+    )
+    bounds.update_xaxes(
+        title="Trades observed",
+        showgrid=True,
+        gridcolor=GRID_COLOR,
+        griddash="dot",
+    )
+    bounds.update_yaxes(
+        title="Lower bound on expectancy (R per trade)",
+        range=[-0.6, 0.45],
+        showgrid=True,
+        gridcolor=GRID_COLOR,
+        griddash="dot",
+        zeroline=False,
+    )
+
+    st.plotly_chart(
+        bounds,
+        width="stretch",
+        config={
+            "displaylogo": False,
+            "toImageButtonOptions": {"format": "png", "filename": "edge_confidence"},
+        },
+    )
+
+    st.caption(
+        "Each line is the **worst** expectancy still compatible with the evidence "
+        "after that many trades. Until a line crosses the black zero line you "
+        "cannot rule out that the system loses money. The diamonds mark the "
+        "crossing point."
+    )
+
+st.divider()
+
+st.subheader("Calculator")
+
+st.markdown(
+    """
+Everything above compares hypothetical systems. This section turns the same
+maths on **your own trading record**: enter what you have actually done so far
+and it reports how much of what you see is real and how much is still noise.
+"""
 )
 
-bounds = go.Figure()
-for name, rr, wr in zip(
-    systems["System"], systems["RR"], systems["Win rate (%)"], strict=True
-):
-    curve = edge_bound_curve(float(wr) / 100, float(rr), max_trades, confidence)
-    needed = trades_to_prove_edge(float(wr) / 100, float(rr), confidence)
-    bounds.add_trace(
-        go.Scatter(
-            x=curve["trades"],
-            y=curve["lower"],
-            mode="lines",
-            name=str(name),
-            line=dict(width=2.5, color=bound_colors[name]),
-            hovertemplate=(
-                f"{name}<br>%{{x}} trades → worst case %{{y:+.3f}}R<extra></extra>"
+st.markdown(
+    """
+**What to enter**
+
+- **Trades taken** — every closed trade in the sample, winners and losers.
+- **Winning trades** — how many of those finished in profit.
+- **Average win / average loss (R)** — the typical size of a winner and of a
+  loser, both as positive numbers. If you always risk the same amount and always
+  stop out at your stop, the average loss is 1R. Enter what you actually got,
+  not what you planned.
+- **Confidence level** — how certain you want to be. Higher means wider, more
+  cautious intervals.
+"""
+)
+
+calc_trades, calc_wins, calc_conf = st.columns(3)
+taken = calc_trades.number_input("Trades taken", min_value=1, value=60, step=1)
+won = calc_wins.number_input("Winning trades", min_value=0, value=27, step=1)
+calc_confidence = calc_conf.select_slider(
+    "Confidence level (%)", options=[80, 90, 95, 99], value=95, key="calc_confidence"
+)
+
+calc_win_col, calc_loss_col = st.columns(2)
+avg_win = calc_win_col.number_input(
+    "Average win (R)", min_value=0.01, value=2.0, step=0.05
+)
+avg_loss = calc_loss_col.number_input(
+    "Average loss (R)", min_value=0.01, value=1.0, step=0.05
+)
+
+if won > taken:
+    st.error("Winning trades cannot exceed trades taken.")
+else:
+    measured_w = won / taken
+    # Expressing the payoff relative to the average loss is what makes it an R
+    # multiple, so a 2.0R win against a 0.5R loss behaves like 4R.
+    measured_rr = avg_win / avg_loss
+    measured_edge = expectancy_from_rr(measured_w, measured_rr)
+    z = z_for(calc_confidence)
+
+    se_w = win_rate_standard_error(measured_w, taken)
+    se_e = expectancy_standard_error(measured_w, measured_rr, taken)
+    breakeven = required_win_rate(measured_rr)
+
+    row_a = st.columns(4)
+    row_a[0].metric("Measured win rate", f"{measured_w:.1%}")
+    row_a[1].metric("Reward-to-risk", f"{measured_rr:.2f}R")
+    row_a[2].metric("Expectancy", f"{measured_edge:+.3f}R")
+    row_a[3].metric(
+        "Total result", f"{measured_edge * taken:+.1f}R", help="Expectancy × trades."
+    )
+
+    row_b = st.columns(4)
+    row_b[0].metric("σ of win rate", f"{se_w * 100:.1f} pp")
+    row_b[1].metric("σ of expectancy", f"{se_e:.3f}R")
+    row_b[2].metric(
+        "Break-even win rate",
+        f"{breakeven:.1%}",
+        delta=f"{(measured_w - breakeven) * 100:+.1f} pp buffer",
+    )
+    row_b[3].metric(
+        "Edge in σ",
+        f"{measured_edge / se_e:.2f}σ" if se_e > 0 else "—",
+        help="How many standard errors the edge sits above zero. Below 2, unproven.",
+    )
+
+    st.markdown(f"**{calc_confidence}% confidence interval — win rate**")
+    row_c = st.columns(4)
+    row_c[0].metric("Lower bound", f"{(measured_w - z * se_w):.1%}")
+    row_c[1].metric("Measured", f"{measured_w:.1%}")
+    row_c[2].metric("Upper bound", f"{(measured_w + z * se_w):.1%}")
+    row_c[3].metric("Half-width", f"± {z * se_w * 100:.1f} pp")
+
+    st.markdown(f"**{calc_confidence}% confidence interval — expectancy**")
+    row_d = st.columns(4)
+    row_d[0].metric("Lower bound", f"{measured_edge - z * se_e:+.3f}R")
+    row_d[1].metric("Measured", f"{measured_edge:+.3f}R")
+    row_d[2].metric("Upper bound", f"{measured_edge + z * se_e:+.3f}R")
+    row_d[3].metric("Half-width", f"± {z * se_e:.3f}R")
+
+    estimate_curve = normal_curve()
+    estimates = make_subplots(
+        rows=1,
+        cols=2,
+        horizontal_spacing=0.10,
+        subplot_titles=(
+            "Where the true win rate could be",
+            "Where the true expectancy could be",
+        ),
+    )
+
+    panels = (
+        (1, measured_w * 100, se_w * 100, breakeven * 100, "break-even", "#4c78a8"),
+        (2, measured_edge, se_e, 0.0, "zero", "#54a24b"),
+    )
+
+    for col, centre, sigma, threshold, threshold_label, colour in panels:
+        x_all = centre + estimate_curve["z"] * sigma
+        inside = estimate_curve["z"].abs() <= z
+
+        estimates.add_trace(
+            go.Scatter(
+                x=x_all[inside],
+                y=estimate_curve["density"][inside],
+                mode="lines",
+                line=dict(width=0),
+                fill="tozeroy",
+                fillcolor=rgba(colour, 0.35),
+                showlegend=False,
+                hoverinfo="skip",
             ),
+            row=1,
+            col=col,
         )
-    )
-    bounds.add_trace(
-        go.Scatter(
-            x=[needed],
-            y=[0],
-            mode="markers+text",
-            marker=dict(size=11, color=bound_colors[name], symbol="diamond"),
-            text=[f"{needed:.0f}"],
-            textposition="bottom center",
-            textfont=dict(size=12, color=bound_colors[name]),
-            showlegend=False,
-            hovertemplate=f"{name} needs %{{x:.0f}} trades<extra></extra>",
+        estimates.add_trace(
+            go.Scatter(
+                x=x_all,
+                y=estimate_curve["density"],
+                mode="lines",
+                line=dict(width=2.5, color=colour),
+                showlegend=False,
+                hoverinfo="skip",
+            ),
+            row=1,
+            col=col,
         )
+
+        estimates.add_vline(
+            x=centre, line_width=2, line_color=colour, row=1, col=col
+        )
+        for bound in (centre - z * sigma, centre + z * sigma):
+            estimates.add_vline(
+                x=bound,
+                line_width=1.5,
+                line_dash="dash",
+                line_color=colour,
+                row=1,
+                col=col,
+            )
+        estimates.add_vline(
+            x=threshold,
+            line_width=2.5,
+            line_color=ZERO_LINE_COLOR,
+            annotation_text=threshold_label,
+            annotation_position="top",
+            annotation_font=dict(size=12, color=ZERO_LINE_COLOR),
+            row=1,
+            col=col,
+        )
+
+        # Keep the threshold in view even when the interval sits far from it.
+        span = max(4 * sigma, abs(centre - threshold) * 1.25)
+        estimates.update_xaxes(
+            range=[
+                min(centre - span, threshold - 0.3 * span),
+                max(centre + span, threshold + 0.3 * span),
+            ],
+            showgrid=True,
+            gridcolor=GRID_COLOR,
+            griddash="dot",
+            row=1,
+            col=col,
+        )
+        estimates.update_yaxes(visible=False, row=1, col=col)
+
+    estimates.update_xaxes(title="Win rate (%)", ticksuffix="%", row=1, col=1)
+    estimates.update_xaxes(title="Expectancy (R per trade)", row=1, col=2)
+    estimates.update_layout(
+        height=360,
+        showlegend=False,
+        margin=dict(t=60, r=30, b=50, l=30),
     )
 
-bounds.add_hline(y=0, line_width=2, line_color=ZERO_LINE_COLOR)
-bounds.update_layout(
-    title=dict(
-        text=f"Worst-case edge still consistent with the data ({confidence}%)",
-        font=dict(size=16),
-    ),
-    height=460,
-    margin=dict(t=80, r=30, b=50, l=70),
-    legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="left", x=0),
-)
-bounds.update_xaxes(
-    title="Trades observed",
-    showgrid=True,
-    gridcolor=GRID_COLOR,
-    griddash="dot",
-)
-bounds.update_yaxes(
-    title="Lower bound on expectancy (R per trade)",
-    range=[-0.6, 0.45],
-    showgrid=True,
-    gridcolor=GRID_COLOR,
-    griddash="dot",
-    zeroline=False,
-)
+    st.plotly_chart(
+        estimates,
+        width="stretch",
+        config={
+            "displaylogo": False,
+            "toImageButtonOptions": {"format": "png", "filename": "calculator_intervals"},
+        },
+    )
 
-st.plotly_chart(
-    bounds,
-    width="stretch",
-    config={
-        "displaylogo": False,
-        "toImageButtonOptions": {"format": "png", "filename": "edge_confidence"},
-    },
-)
+    st.caption(
+        "Each curve shows where the true value plausibly sits given your record: "
+        "centred on your measurement, with a width set by the standard error. "
+        "The shaded band is the "
+        f"{calc_confidence}% interval. **If the black line falls inside the "
+        "shaded band, you cannot yet rule out that the system is break-even or "
+        "worse.** Collecting more trades narrows both curves."
+    )
 
-st.caption(
-    "Each line is the **worst** expectancy still compatible with the evidence "
-    "after that many trades. Until a line crosses the black zero line you cannot "
-    "rule out that the system loses money. The diamonds mark the crossing point."
-)
+    if measured_edge <= 0:
+        st.error(
+            f"The measured edge is {measured_edge:+.3f}R per trade. On this "
+            "record the system loses money, so there is nothing to confirm — "
+            "the win rate would need to exceed "
+            f"{breakeven:.1%} to break even at this reward-to-risk."
+        )
+    else:
+        required = trades_to_prove_edge(measured_w, measured_rr, calc_confidence)
+        remaining = max(0, ceil(required - taken))
+        if remaining == 0:
+            st.success(
+                f"With {taken} trades you are past the {required:.0f} needed. The "
+                f"edge is distinguishable from zero at {calc_confidence}% "
+                "confidence — the lower bound above is positive."
+            )
+        else:
+            st.warning(
+                f"About **{required:.0f} trades** are needed before this edge is "
+                f"distinguishable from zero at {calc_confidence}% confidence. You "
+                f"have {taken}, so roughly **{remaining} more** to go. Until then "
+                "the lower bound above stays negative and a losing system cannot "
+                "be ruled out."
+            )
+
+    if not normal_approximation_is_safe(measured_w, taken):
+        st.info(
+            "With this few trades (or this lopsided a win rate) the normal "
+            "approximation is shaky — the rule of thumb wants at least 10 "
+            "winners and 10 losers. Treat the intervals as rough."
+        )
+
+    st.markdown(
+        """
+**How to read the output**
+
+- **Measured win rate** and **expectancy** are what your record shows. They are
+  estimates, not truths.
+- **σ of win rate / σ of expectancy** are the standard errors: the typical gap
+  between those estimates and reality, given how many trades you have.
+- **Break-even win rate** is what this reward-to-risk needs to merely break
+  even; the delta beneath it is your buffer.
+- **Edge in σ** is the single most useful number here. It is expectancy divided
+  by its own standard error, so it says how many sigma your edge sits above
+  zero. Under 2, the result is not yet statistically convincing however good the
+  total looks.
+- The **confidence intervals** give the range of true values consistent with
+  your record. If the expectancy interval includes zero, you do not yet have
+  evidence of an edge.
+"""
+    )
+
+with st.expander("Formulas used"):
+    st.markdown("Measured win rate, from $k$ winners in $n$ trades:")
+    st.latex(r"\hat{W} = \frac{k}{n}")
+
+    st.markdown(
+        "Reward-to-risk expressed as an R multiple, so the average loss becomes "
+        "the unit of risk:"
+    )
+    st.latex(r"R = \frac{\text{average win}}{\text{average loss}}")
+
+    st.markdown("Expectancy per trade, in R:")
+    st.latex(r"E = \hat{W}(R + 1) - 1")
+
+    st.markdown("Standard error of the win rate, and of the expectancy:")
+    st.latex(
+        r"\mathrm{SE}(\hat{W}) = \sqrt{\frac{\hat{W}(1-\hat{W})}{n}}"
+    )
+    st.latex(r"\mathrm{SE}(E) = (R+1)\,\mathrm{SE}(\hat{W})")
+
+    st.markdown("Confidence intervals at the chosen $z$:")
+    st.latex(r"\hat{W} \pm z\,\mathrm{SE}(\hat{W}) \qquad E \pm z\,\mathrm{SE}(E)")
+
+    st.markdown("Break-even win rate for this reward-to-risk:")
+    st.latex(r"W^{*} = \frac{1}{1 + R}")
+
+    st.markdown("Trades needed before the edge clears zero:")
+    st.latex(r"n_{\text{prove}} = \frac{z^{2}(R+1)^{2}\hat{W}(1-\hat{W})}{E^{2}}")
+
+    st.markdown(
+        """
+Note that these use the **measured** $\\hat{W}$ in place of the true $W$, so the
+required trade count is itself an estimate — it will move as your record grows.
+"""
+    )
 
 st.divider()
 
