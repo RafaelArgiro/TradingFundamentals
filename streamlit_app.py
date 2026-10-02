@@ -21,6 +21,11 @@ page = st.navigation(
             title="Variance",
             icon=":material/show_chart:",
         ),
+        st.Page(
+            "app_pages/risk.py",
+            title="Risk",
+            icon=":material/balance:",
+        ),
     ],
     position="top",
 )
